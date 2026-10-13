@@ -1,0 +1,53 @@
+blueprint:
+  name: reCamera region motion → run actions
+  description: >-
+    Runs any Home Assistant actions when a reCamera detects motion inside a
+    drawn region: lights, sirens, scenes, TTS, scripts, other cameras.
+    The snapshot saved for the event is available as `image_url`.
+  domain: automation
+  author: Seeed Studio
+  homeassistant:
+    min_version: 2024.6.0
+
+  input:
+    camera_device:
+      name: reCamera
+      description: The reCamera whose regions trigger these actions.
+      selector:
+        device:
+          integration: recamera
+    on_motion:
+      name: Actions on motion
+      description: >-
+        Runs on every `motion_start`. Use `trigger.event.data` for details,
+        e.g. `{{ trigger.event.data.image_url }}` or `{{ trigger.event.data.bbox }}`.
+      selector:
+        action: {}
+    on_clear:
+      name: Actions when the region is quiet again
+      description: Runs on `motion_end`. Leave empty to do nothing.
+      selector:
+        action: {}
+
+mode: queued
+max: 5
+max_exceeded: silent
+
+variables:
+  camera_device: !input camera_device
+  event_data: "{{ trigger.event.data }}"
+
+trigger:
+  - platform: event
+    event_type: recamera_motion
+
+condition:
+  - condition: template
+    value_template: "{{ event_data.ha_device_id == camera_device }}"
+
+action:
+  - choose:
+      - conditions: "{{ event_data.event == 'motion_start' }}"
+        sequence: !input on_motion
+      - conditions: "{{ event_data.event == 'motion_end' }}"
+        sequence: !input on_clear

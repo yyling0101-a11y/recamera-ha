@@ -1,0 +1,114 @@
+blueprint:
+  name: reCamera region motion → phone notification with snapshot
+  description: >-
+    Sends a notification through any Home Assistant notify service (the
+    companion app, Telegram, Pushover, ...) when a reCamera detects motion
+    inside a drawn region. The frame captured by the camera is attached, and
+    tapping the notification opens the reCamera sidebar panel.
+  domain: automation
+  author: Seeed Studio
+  homeassistant:
+    min_version: 2024.6.0
+
+  input:
+    camera_device:
+      name: reCamera
+      description: The reCamera whose regions should raise notifications.
+      selector:
+        device:
+          integration: recamera
+    notify_action:
+      name: Notify service
+      description: >-
+        The notification target, for example `notify.mobile_app_pixel`.
+        It receives the title, message and the snapshot attachment.
+      selector:
+        action: {}
+    cooldown:
+      name: Quiet period
+      description: >-
+        Ignore further motion events for this many seconds after a
+        notification, so one person walking through does not spam the phone.
+      default: 60
+      selector:
+        number:
+          min: 0
+          max: 3600
+          step: 10
+          unit_of_measurement: seconds
+          mode: slider
+    attach_snapshot:
+      name: Attach snapshot
+      description: Turn off to send a text only notification.
+      default: true
+      selector:
+        boolean: {}
+
+mode: single
+max_exceeded: silent
+
+variables:
+  camera_device: !input camera_device
+  cooldown: !input cooldown
+  attach_snapshot: !input attach_snapshot
+  event_data: "{{ trigger.event.data }}"
+  image_url: "{{ event_data.image_url or '' }}"
+  ratio_pct: "{{ '%.2f' | format((event_data.motion_ratio or 0) * 100) }}"
+  occurred_at: >-
+    {{ ((event_data.captured_at or event_data.timestamp)
+        | as_datetime | as_local).strftime('%Y-%m-%d %H:%M:%S') }}
+
+trigger:
+  - platform: event
+    event_type: recamera_motion
+
+condition:
+  - condition: template
+    value_template: "{{ event_data.event == 'motion_start' }}"
+  - condition: template
+    value_template: "{{ event_data.ha_device_id == camera_device }}"
+  - condition: template
+    value_template: >-
+      {{ cooldown | int(0) == 0
+         or this.attributes.last_triggered is none
+         or (now() - this.attributes.last_triggered).total_seconds()
+            > cooldown | int(0) }}
+
+action:
+  - variables:
+      title: "{{ event_data.device }} motion in the selected region"
+      message: >-
+        {{ event_data.motion_pixels }} motion pixels, {{ ratio_pct }}% of the active
+        zones at {{ occurred_at }}.
+  - alias: Notify
+    choose:
+      - conditions: "{{ attach_snapshot and image_url != '' }}"
+        sequence:
+          - service: !input notify_action
+            data:
+              title: "{{ title }}"
+              message: "{{ message }}"
+              data:
+                image: "{{ image_url }}"
+                attachment:
+                  content-type: jpeg
+                clickUrl: /recamera
+                tag: "recamera_{{ event_data.entry_id }}_{{ event_data.event_id }}"
+                channel: reCamera
+                importance: high
+                priority: high
+                ttl: 0
+                timeout: 30
+    default:
+      - service: !input notify_action
+        data:
+          title: "{{ title }}"
+          message: "{{ message }}"
+          data:
+            clickUrl: /recamera
+            tag: "recamera_{{ event_data.entry_id }}_{{ event_data.event_id }}"
+            channel: reCamera
+            importance: high
+            priority: high
+            ttl: 0
+            timeout: 30

@@ -1,0 +1,4 @@
+# https://developers.home-assistant.io/docs/apps/repository#repository-configuration
+name: reCamera for Home Assistant
+url: https://github.com/yyling0101-a11y/recamera-ha
+maintainer: yyling0101-a11y
