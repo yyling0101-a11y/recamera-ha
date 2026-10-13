@@ -6,6 +6,7 @@ import base64
 import json
 import logging
 import os
+import shutil
 from typing import Any
 
 import voluptuous as vol
@@ -140,6 +141,11 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
             pass
 
     await hass.async_add_executor_job(_remove)
+    await hass.async_add_executor_job(
+        shutil.rmtree,
+        hass.config.path(".storage", "recamera_packages", entry.entry_id),
+        True,
+    )
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
@@ -200,6 +206,29 @@ def _register_websocket_commands(hass: HomeAssistant) -> None:
         hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
     ) -> None:
         connection.send_result(msg["id"], {"devices": _device_summaries(hass)})
+
+    @websocket_api.websocket_command(
+        {
+            vol.Required("type"): f"{DOMAIN}/upload_package",
+            vol.Required("entry_id"): cv.string,
+            vol.Required("package"): cv.string,
+        }
+    )
+    @websocket_api.require_admin
+    @websocket_api.async_response
+    async def ws_upload_package(
+        hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+    ) -> None:
+        coordinator = _coordinator(hass, msg["entry_id"])
+        if coordinator is None:
+            connection.send_error(msg["id"], "not_found", "unknown reCamera")
+            return
+        try:
+            manifest = await coordinator.async_upload_package(msg["package"])
+        except (ValueError, OSError) as err:
+            connection.send_error(msg["id"], "invalid_package", str(err))
+            return
+        connection.send_result(msg["id"], {"app": manifest})
 
     @websocket_api.websocket_command(
         {vol.Required("type"): f"{DOMAIN}/state", vol.Required("entry_id"): cv.string}
@@ -417,6 +446,7 @@ def _register_websocket_commands(hass: HomeAssistant) -> None:
 
     for command in (
         ws_devices,
+        ws_upload_package,
         ws_state,
         ws_refresh,
         ws_save_config,

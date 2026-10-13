@@ -33,8 +33,8 @@
       field_rtsp_stream: "RTSP 流名",
       card_title: "选区运动检测",
       card_open: "打开选区编辑",
-      online: "在线",
-      offline: "离线",
+      online: "应用在线",
+      offline: "应用未上报",
       motion: "运动中",
       idle: "无运动",
       warming: "背景预热中",
@@ -110,12 +110,22 @@
       apps_title: "应用",
       running_app: "当前应用",
       app_running: "运行中",
-      app_stopped: "已停止",
+      app_stopped: "未检测到应用",
       open_app: "打开",
       launch_app: "启动",
       one_app_hint: "一台设备同一时间只运行一个应用",
       app_region_motion: "选区运动检测",
       app_region_motion_desc: "在画面上绘制检测区域，检测到运动时告警并抓拍",
+      reachable: "设备可达",
+      unreachable: "设备不可达",
+      api_unavailable: "应用接口未运行",
+      upload_package: "上传应用包",
+      upload_hint: "应用包保存在 HA；请用 reCamera Solution 将应用安装到设备。应用运行后向此设备的推送地址发送事件。",
+      package_uploaded: "应用包已保存",
+      package_too_large: "应用包不能超过 8 MiB",
+      uploaded: "已上传到 HA",
+      waiting_app: "等待设备应用上报",
+      custom_events: "应用事件",
     },
     en: {
       title: "reCamera",
@@ -145,8 +155,8 @@
       field_rtsp_stream: "RTSP stream",
       card_title: "Region motion detection",
       card_open: "Open region editor",
-      online: "Online",
-      offline: "Offline",
+      online: "App online",
+      offline: "No app signal",
       motion: "Motion",
       idle: "Idle",
       warming: "Warming up",
@@ -222,26 +232,46 @@
       apps_title: "Apps",
       running_app: "Current app",
       app_running: "Running",
-      app_stopped: "Stopped",
+      app_stopped: "No app detected",
       open_app: "Open",
       launch_app: "Launch",
       one_app_hint: "A device runs one app at a time",
       app_region_motion: "Region motion detection",
       app_region_motion_desc: "Draw detection zones; get alerts and snapshots on motion",
+      reachable: "Device reachable",
+      unreachable: "Device unreachable",
+      api_unavailable: "App API unavailable",
+      upload_package: "Upload app package",
+      upload_hint: "The package is stored in HA. Install it on the camera with reCamera Solution, then send events to this device's push URL.",
+      package_uploaded: "App package saved",
+      package_too_large: "Package must be under 8 MiB",
+      uploaded: "Uploaded to HA",
+      waiting_app: "Waiting for app events",
+      custom_events: "App events",
     },
   };
 
   const STYLE = `
-    :host { display: block; height: 100%; }
+    :host {
+      display: block; height: 100%;
+      --card-background-color: #121922;
+      --primary-background-color: #0b1016;
+      --secondary-background-color: #17212c;
+      --primary-text-color: #f4f8fb;
+      --secondary-text-color: #8fa2b5;
+      --divider-color: #273747;
+      --primary-color: #11b6e8;
+      --text-primary-color: #fff;
+    }
     * { box-sizing: border-box; }
     .wrap {
       height: 100%; overflow: auto; padding: 16px;
-      background: var(--primary-background-color, #fafafa);
+      background: radial-gradient(circle at 78% -8%, rgba(17,182,232,.13), transparent 30%), radial-gradient(circle at 5% 25%, rgba(45,120,255,.09), transparent 28%), var(--primary-background-color);
       color: var(--primary-text-color, #212121);
-      font-size: 14px;
+      font: 14px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
     }
     .header { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; flex-wrap: wrap; }
-    .header h1 { font-size: 22px; font-weight: 500; margin: 0; }
+    .header h1 { font-size: clamp(24px,2.4vw,34px); font-weight: 700; letter-spacing: -.035em; margin: 0; }
     .header .sub { color: var(--secondary-text-color, #727272); font-size: 13px; }
     .spacer { flex: 1 1 auto; }
     .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; margin-top: 16px; }
@@ -252,22 +282,22 @@
       box-shadow: 0 1px 3px rgba(0,0,0,.12); cursor: pointer;
       transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
     }
-    .card:hover { transform: translateY(-3px); box-shadow: 0 10px 26px rgba(0,0,0,.2); border-color: color-mix(in srgb, var(--primary-color, #11b6e8) 45%, var(--divider-color, #e0e0e0)); }
+    .card:hover { transform: translateY(-4px); box-shadow: 0 18px 55px rgba(0,0,0,.26); border-color: #38536b; }
     .card h2 { margin: 0 0 4px; font-size: 17px; font-weight: 600; }
     .device-card { padding: 0; overflow: hidden; min-height: 200px; }
     .device-visual {
-      height: 92px; display: flex; align-items: center; padding: 0 20px;
-      background: linear-gradient(110deg, color-mix(in srgb, var(--primary-color, #11b6e8) 26%, transparent), color-mix(in srgb, var(--primary-color, #11b6e8) 8%, transparent));
+      height: 94px; display: flex; align-items: center; padding: 0 23px;
+      background: linear-gradient(110deg, #10293b, #14364b 55%, #192840);
       border-bottom: 1px solid var(--divider-color, rgba(127,127,127,.18));
     }
     .camera-mark {
-      width: 58px; height: 58px; border-radius: 16px; display: grid; place-items: center;
-      background: var(--card-background-color, #fff); color: var(--primary-color, #11b6e8);
+      width: 62px; height: 62px; border-radius: 18px; display: grid; place-items: center;
+      background: #fff; color: #11b6e8;
       box-shadow: 0 10px 24px color-mix(in srgb, var(--primary-color, #11b6e8) 30%, transparent);
     }
     .camera-mark svg { width: 34px; height: 34px; display: block; }
-    .device-body { padding: 16px 18px 18px; }
-    .name { font-size: 17px; font-weight: 600; }
+    .device-body { padding: 20px 21px; }
+    .name { font-size: 18px; font-weight: 720; }
     .host { font: 12px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; color: var(--secondary-text-color, #8fa2b5); margin-top: 4px; }
     .meta { color: var(--secondary-text-color, #727272); font-size: 13px; margin-top: 8px; }
     .chip-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
@@ -424,15 +454,20 @@
       this._view = "home";
       this._previewImg = null;
       this._previewTimer = null;
+      this._homeTimer = null;
+      this._selectedApp = null;
     }
 
     connectedCallback() {
       if (!this._built) this._build();
       if (this._hass && !this._booted) this._boot();
+      else if (this._booted) this._startHomeTimer();
     }
 
     disconnectedCallback() {
       this._stopTimers();
+      if (this._homeTimer) clearInterval(this._homeTimer);
+      this._homeTimer = null;
     }
 
     set hass(value) {
@@ -466,6 +501,14 @@
       if (this._booted) return;
       this._booted = true;
       await this._loadDevices();
+      this._startHomeTimer();
+    }
+
+    _startHomeTimer() {
+      if (this._homeTimer) return;
+      this._homeTimer = setInterval(() => {
+        if (this._view === "home") this._loadDevices();
+      }, 10000);
     }
 
     async ws(type, data = {}) {
@@ -508,7 +551,8 @@
     _render() {
       if (!this._built) return;
       let view;
-      if (this._view === "app" && this._state) view = this._editorView();
+      if (this._view === "custom_app" && this._state) view = this._customAppView();
+      else if (this._view === "app" && this._state) view = this._editorView();
       else if (this._view === "device" && this._state) view = this._deviceView();
       else view = this._homeView();
       this._root.replaceChildren(view);
@@ -580,9 +624,9 @@
     _deviceCard(device) {
       const running = (device.apps || []).find((app) => app.running);
       const runningLabel = running
-        ? this.t(running.name_key) !== running.name_key
+        ? running.name || (this.t(running.name_key) !== running.name_key
           ? this.t(running.name_key)
-          : running.id
+          : running.id)
         : null;
       const chips = [
         h(
@@ -591,10 +635,15 @@
           h("i", { class: `dot ${device.available ? "ok" : "bad"}` }),
           device.available ? this.t("online") : this.t("offline")
         ),
+        h("span", { class: "chip" },
+          h("i", { class: `dot ${device.reachable ? "ok" : "bad"}` }),
+          device.reachable ? this.t("reachable") : this.t("unreachable")),
         running
           ? h("span", { class: "chip" }, h("i", { class: "dot ok" }), runningLabel)
           : h("span", { class: "chip" }, h("i", { class: "dot" }), this.t("app_stopped")),
-        h("span", { class: "chip" }, device.enabled ? this.t("detection_on") : this.t("detection_off")),
+        running?.id === "region_motion"
+          ? h("span", { class: "chip" }, device.enabled ? this.t("detection_on") : this.t("detection_off"))
+          : null,
       ];
       if (device.legacy_device) chips.push(h("span", { class: "chip warn" }, "legacy"));
 
@@ -619,7 +668,7 @@
           { class: "device-body" },
           h("div", { class: "name" }, device.name),
           h("div", { class: "host" }, `${device.host}:${device.api_port}`),
-          h("div", { class: "meta" }, `${this.t("running_app")}: ${runningLabel || this.t("app_stopped")}`),
+          h("div", { class: "meta" }, `${this.t("running_app")}: ${runningLabel || this.t("app_stopped")}${running?.version ? ` · v${running.version}` : ""}`),
           h("div", { class: "chip-row" }, chips)
         )
       );
@@ -860,8 +909,12 @@
           h("i", { class: `dot ${state.available ? "ok" : "bad"}` }),
           state.available ? this.t("online") : this.t("offline")
         ),
-        state.motion ? h("span", { class: "chip live" }, this.t("motion")) : h("span", { class: "chip" }, this.t("idle")),
-        h("span", { class: "chip" }, state.enabled ? this.t("detection_on") : this.t("detection_off")),
+        h("span", { class: "chip" },
+          h("i", { class: `dot ${state.reachable ? "ok" : "bad"}` }),
+          state.reachable ? this.t("reachable") : this.t("unreachable")),
+        state.apps?.[0]?.running
+          ? (state.motion ? h("span", { class: "chip live" }, this.t("motion")) : h("span", { class: "chip" }, this.t("idle")))
+          : h("span", { class: "chip warn" }, this.t("api_unavailable")),
       ];
       const header = h(
         "div",
@@ -881,17 +934,73 @@
           "div",
           { class: "panel", style: { marginTop: "16px" } },
           h("h3", {}, this.t("live")),
-          h(
-            "div",
-            { class: "preview-stage" },
-            (this._previewImg = h("img", { alt: state.name, onerror: () => this._onPreviewError() }))
-          ),
-          h("div", { class: "hint", style: { marginTop: "8px" } }, this.t("stream_hint"))
+          state.apps?.[0]?.running
+            ? h("div", { class: "preview-stage" },
+                (this._previewImg = h("img", { alt: state.name, onerror: () => this._onPreviewError() })))
+            : h("div", { class: "empty" }, this.t("api_unavailable")),
+          state.apps?.[0]?.running
+            ? h("div", { class: "hint", style: { marginTop: "8px" } }, this.t("stream_hint"))
+            : null
         ),
         h("h3", { style: { margin: "18px 0 4px", fontSize: "15px", fontWeight: "500" } }, this.t("apps_title")),
         h("div", { class: "hint", style: { marginBottom: "10px" } }, this.t("one_app_hint")),
-        h("div", { class: "cards" }, apps.map((app) => this._appCard(app)))
+        h("div", { class: "cards" }, apps.map((app) => this._appCard(app))),
+        h("div", { class: "panel", style: { marginTop: "18px" } },
+          h("button", { onclick: () => this._choosePackage() }, this.t("upload_package")),
+          h("div", { class: "hint", style: { marginTop: "8px" } }, this.t("upload_hint")))
       );
+    }
+
+    _choosePackage() {
+      const input = h("input", { type: "file", accept: ".zip,application/zip" });
+      input.style.display = "none";
+      this.shadowRoot.appendChild(input);
+      input.addEventListener("change", async () => {
+        const file = input.files?.[0];
+        input.remove();
+        if (!file) return;
+        if (file.size > 8 * 1024 * 1024) {
+          this.toast(this.t("package_too_large"), "bad");
+          return;
+        }
+        try {
+          const bytes = new Uint8Array(await file.arrayBuffer());
+          let binary = "";
+          for (let i = 0; i < bytes.length; i += 32768) {
+            binary += String.fromCharCode(...bytes.subarray(i, i + 32768));
+          }
+          await this.ws("upload_package", {
+            entry_id: this._state.entry_id,
+            package: btoa(binary),
+          });
+          this._state = await this.ws("state", { entry_id: this._state.entry_id });
+          this._render();
+          this.toast(this.t("package_uploaded"));
+        } catch (error) {
+          this.toast(String(error?.message || error), "bad");
+        }
+      });
+      input.addEventListener("cancel", () => input.remove(), { once: true });
+      input.click();
+    }
+
+    _customAppView() {
+      const app = (this._state.apps || []).find((item) => item.id === this._selectedApp);
+      if (!app) return this._deviceView();
+      const events = (this._state.events || []).filter((item) => item.source === app.source);
+      return h("div", {},
+        h("div", { class: "header" },
+          h("button", { class: "ghost", onclick: () => this._closeDevice() }, `‹ ${this.t("back")}`),
+          h("h1", {}, app.name), h("span", { class: "spacer" }),
+          h("button", { class: "ghost", onclick: () => this._openDevice(this._state.entry_id) }, this.t("refresh"))),
+        h("div", { class: "panel" },
+          h("div", { class: "hint" }, `${this.t("running_app")}: ${app.running ? this.t("app_running") : this.t("waiting_app")}`),
+          h("div", { class: "hint" }, `${this.t("push_url")}: `, h("code", {}, this._state.push_url || "—")),
+          h("h3", { style: { marginTop: "18px" } }, this.t("custom_events")),
+          events.length ? events.map((event) => h("div", { class: "zone" },
+            h("span", {}, event.event), h("span", { class: "spacer" }),
+            h("span", { class: "hint" }, event.timestamp)))
+            : h("div", { class: "hint" }, this.t("no_events"))));
     }
 
     _startPreview() {
@@ -924,22 +1033,30 @@
     }
 
     _appCard(app) {
-      const label = this.t(app.name_key) !== app.name_key ? this.t(app.name_key) : app.id;
-      const desc = this.t(app.description_key) !== app.description_key ? this.t(app.description_key) : "";
+      const label = app.name || (this.t(app.name_key) !== app.name_key ? this.t(app.name_key) : app.id);
+      const desc = app.description || (this.t(app.description_key) !== app.description_key ? this.t(app.description_key) : "");
       const running = app.running;
+      const open = () => {
+        if (app.id === "region_motion") {
+          if (running) this._openApp();
+          else this.toast(this.t("api_unavailable"), "bad");
+        }
+        else { this._selectedApp = app.id; this._view = "custom_app"; this._render(); }
+      };
       return h(
         "div",
-        { class: `card app-card${running ? "" : " stopped"}`, onclick: running ? () => this._openApp() : null },
+        { class: `card app-card${running ? "" : " stopped"}`, onclick: open },
         h("div", { class: "app-icon" }, "▦"),
         h("h2", {}, label),
         desc ? h("div", { class: "hint" }, desc) : null,
-        h("div", { class: "chips" }, h("span", { class: `chip ${running ? "ok" : ""}` }, running ? this.t("app_running") : this.t("app_stopped"))),
+        h("div", { class: "chips" }, h("span", { class: `chip ${running ? "ok" : ""}` },
+          running ? this.t("app_running") : app.uploaded ? this.t("uploaded") : this.t("app_stopped"))),
         h(
           "div",
           { class: "app-actions" },
-          running
-            ? h("button", { onclick: (event) => { event.stopPropagation(); this._openApp(); } }, this.t("open_app"))
-            : h("button", { class: "ghost" }, this.t("launch_app"))
+          running || app.uploaded
+            ? h("button", { onclick: (event) => { event.stopPropagation(); open(); } }, this.t("open_app"))
+            : h("span", { class: "hint" }, this.t("waiting_app"))
         )
       );
     }

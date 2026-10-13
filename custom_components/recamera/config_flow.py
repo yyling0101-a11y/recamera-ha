@@ -42,7 +42,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class RecameraConfigFlow(ConfigFlow, domain=DOMAIN):
-    """Add a reCamera that runs the motion detection program."""
+    """Add one SG2002 reCamera, including devices awaiting an app flash."""
 
     VERSION = 1
 
@@ -67,42 +67,44 @@ class RecameraConfigFlow(ConfigFlow, domain=DOMAIN):
             try:
                 health = await async_validate_device(host, port)
             except RecameraDeviceError as err:
-                _LOGGER.warning("reCamera validation failed for %s:%s - %s", host, port, err)
-                errors["base"] = "cannot_connect"
+                # A camera can be added before Solution flashes an application,
+                # or while it is temporarily offline. Its card reports both
+                # host reachability and motion API availability after setup.
+                _LOGGER.info("reCamera %s:%s has no motion API yet: %s", host, port, err)
+                health = {}
             except Exception:  # noqa: BLE001 - unexpected transport errors
                 _LOGGER.exception("Unexpected error while validating %s:%s", host, port)
-                errors["base"] = "unknown"
-            else:
-                snapshot = health.get("snapshot") or {}
-                if not snapshot.get("enabled"):
-                    _LOGGER.info(
-                        "reCamera %s reports no snapshot channel; alerts will not carry a frame",
-                        host,
-                    )
-                return self.async_create_entry(
-                    title=name,
-                    data={
-                        CONF_HOST: host,
-                        CONF_API_PORT: port,
-                        CONF_DEVICE_NAME: name,
-                        CONF_RTSP_PORT: int(user_input.get(CONF_RTSP_PORT) or DEFAULT_RTSP_PORT),
-                        CONF_RTSP_STREAM: str(
-                            user_input.get(CONF_RTSP_STREAM) or DEFAULT_RTSP_STREAM
-                        ),
-                    },
-                    options={
-                        CONF_POLL_INTERVAL: DEFAULT_POLL_INTERVAL,
-                        CONF_PREVIEW_FPS: DEFAULT_PREVIEW_FPS,
-                        CONF_SNAPSHOT_KEEP: DEFAULT_SNAPSHOT_KEEP,
-                        CONF_HA_NOTIFICATION: True,
-                        CONF_PUSH_ENABLED: True,
-                        CONF_PUSH_INCLUDE_IMAGE: True,
-                    },
+                health = {}
+            snapshot = health.get("snapshot") or {}
+            if health and not snapshot.get("enabled"):
+                _LOGGER.info(
+                    "reCamera %s reports no snapshot channel; alerts will not carry a frame",
+                    host,
                 )
+            return self.async_create_entry(
+                title=name,
+                data={
+                    CONF_HOST: host,
+                    CONF_API_PORT: port,
+                    CONF_DEVICE_NAME: name,
+                    CONF_RTSP_PORT: int(user_input.get(CONF_RTSP_PORT) or DEFAULT_RTSP_PORT),
+                    CONF_RTSP_STREAM: str(
+                        user_input.get(CONF_RTSP_STREAM) or DEFAULT_RTSP_STREAM
+                    ),
+                },
+                options={
+                    CONF_POLL_INTERVAL: DEFAULT_POLL_INTERVAL,
+                    CONF_PREVIEW_FPS: DEFAULT_PREVIEW_FPS,
+                    CONF_SNAPSHOT_KEEP: DEFAULT_SNAPSHOT_KEEP,
+                    CONF_HA_NOTIFICATION: True,
+                    CONF_PUSH_ENABLED: True,
+                    CONF_PUSH_INCLUDE_IMAGE: True,
+                },
+            )
 
         schema = vol.Schema(
             {
-                vol.Required(CONF_HOST): str,
+                vol.Required(CONF_HOST): vol.All(str, vol.Match(r"^[A-Za-z0-9][A-Za-z0-9.-]*$")),
                 vol.Optional(CONF_DEVICE_NAME, default=DEFAULT_DEVICE_NAME): str,
                 vol.Optional(CONF_API_PORT, default=DEFAULT_API_PORT): vol.All(
                     vol.Coerce(int), vol.Range(min=1, max=65535)

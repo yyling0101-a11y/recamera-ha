@@ -4,10 +4,16 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import binascii
+import json
+from io import BytesIO
 from collections import OrderedDict, deque
 from datetime import datetime, timezone
 import logging
 import os
+import re
+import time
+import zipfile
 from typing import Any, Callable
 
 from homeassistant.components import webhook
@@ -46,6 +52,8 @@ _LOGGER = logging.getLogger(__name__)
 MOTION_POLL_INTERVAL = 0.4
 EVENT_HISTORY = 50
 SEEN_EVENTS = 64
+MAX_PACKAGE_BYTES = 8 * 1024 * 1024
+APP_ID = re.compile(r"^[a-z][a-z0-9_]{1,47}$")
 
 
 class RecameraCoordinator:
@@ -72,6 +80,10 @@ class RecameraCoordinator:
         self.device_identifier = f"{self.host}_{self.api_port}"
 
         self.available = False
+        self.reachable = False
+        self.app_version = ""
+        self.custom_apps: dict[str, dict[str, Any]] = {}
+        self.app_seen_at: dict[str, float] = {}
         self.legacy_device = False
         self.status: dict[str, Any] = {}
         self.config: dict[str, Any] = {}
@@ -153,7 +165,18 @@ class RecameraCoordinator:
                 "name_key": "app_region_motion",
                 "description_key": "app_region_motion_desc",
                 "running": bool(self.available),
+                "installed": bool(self.available),
+                "source": DEVICE_SOURCE,
+                "version": self.app_version,
             }
+        ] + [
+            {
+                **manifest,
+                "running": time.monotonic() - self.app_seen_at.get(manifest["source"], 0) < 90,
+                "installed": None,
+                "uploaded": True,
+            }
+            for manifest in self.custom_apps.values()
         ]
 
     def as_dict(self) -> dict[str, Any]:
@@ -166,7 +189,8 @@ class RecameraCoordinator:
             "api_port": self.api_port,
             "api_base": self.api_base,
             "rtsp_url": self.rtsp_url,
-            "available": self.available,
+            "available": self.available or any(app["running"] for app in self.apps[1:]),
+            "reachable": self.reachable,
             "legacy_device": self.legacy_device,
             "motion": self.motion,
             "warming_up": self.warming_up,
@@ -199,6 +223,7 @@ class RecameraCoordinator:
 
     # ------------------------------------------------------------- lifecycle
     async def async_setup(self) -> None:
+        await self.async_load_packages()
         webhook.async_register(
             self.hass,
             DOMAIN,
@@ -267,6 +292,11 @@ class RecameraCoordinator:
 
         try:
             self.health = await self.client.async_health()
+            try:
+                version = await self.client.async_version()
+                self.app_version = str(version.get("version") or "")[:64]
+            except RecameraDeviceError:
+                self.app_version = ""
             self.config = await self.client.async_get_config()
             try:
                 self.notify_state = await self.client.async_get_notify()
@@ -274,12 +304,114 @@ class RecameraCoordinator:
                 self.legacy_device = True
                 self.notify_state = {}
             self.available = True
+            self.reachable = True
             self.configured = bool(self.status.get("configured", False)) or bool(self.zones)
         except RecameraDeviceError as err:
             self.available = False
+            self.reachable = await self.async_probe_host()
             self.push_error = str(err)
             _LOGGER.warning("reCamera %s unreachable: %s", self.name, err)
         self._notify_listeners()
+
+    async def async_probe_host(self) -> bool:
+        """Check a management port when the application API is unavailable."""
+        for port in (80, 22):
+            try:
+                _, writer = await asyncio.wait_for(
+                    asyncio.open_connection(self.host, port), timeout=1.2
+                )
+                writer.close()
+                await writer.wait_closed()
+                return True
+            except (OSError, asyncio.TimeoutError):
+                continue
+        return False
+
+    @property
+    def package_folder(self) -> str:
+        return self.hass.config.path(".storage", "recamera_packages", self.entry.entry_id)
+
+    async def async_load_packages(self) -> None:
+        """Read uploaded manifests without executing or extracting package contents."""
+        def _load() -> dict[str, dict[str, Any]]:
+            found = {}
+            if not os.path.isdir(self.package_folder):
+                return found
+            for filename in os.listdir(self.package_folder):
+                if not filename.endswith(".zip"):
+                    continue
+                try:
+                    with open(os.path.join(self.package_folder, filename), "rb") as handle:
+                        manifest = self._package_manifest(handle.read())
+                    found[manifest["id"]] = manifest
+                except (OSError, ValueError, zipfile.BadZipFile):
+                    _LOGGER.warning("Skipping invalid reCamera package %s", filename)
+            return found
+        self.custom_apps = await self.hass.async_add_executor_job(_load)
+
+    @staticmethod
+    def _package_manifest(data: bytes) -> dict[str, Any]:
+        if not data or len(data) > MAX_PACKAGE_BYTES:
+            raise ValueError("Package must be a ZIP smaller than 8 MiB")
+        with zipfile.ZipFile(BytesIO(data)) as archive:
+            if len(archive.infolist()) > 128:
+                raise ValueError("Package has too many files")
+            try:
+                info = archive.getinfo("recamera-app.json")
+            except KeyError as err:
+                raise ValueError("ZIP must contain recamera-app.json at its root") from err
+            if info.file_size > 32768:
+                raise ValueError("App manifest is too large")
+            try:
+                raw = json.loads(archive.read(info))
+            except (ValueError, UnicodeDecodeError) as err:
+                raise ValueError("Invalid app manifest") from err
+        if not isinstance(raw, dict):
+            raise ValueError("App manifest must be a JSON object")
+        app_id = raw.get("id")
+        source = raw.get("source")
+        if not isinstance(app_id, str) or not APP_ID.fullmatch(app_id) or app_id == "region_motion":
+            raise ValueError("Invalid app id")
+        if not isinstance(source, str) or not APP_ID.fullmatch(source) or source == DEVICE_SOURCE:
+            raise ValueError("Invalid event source")
+        name = raw.get("name")
+        if not isinstance(name, str) or not 1 <= len(name.strip()) <= 80:
+            raise ValueError("App name is required (max 80 characters)")
+        return {
+            "id": app_id,
+            "name": name.strip(),
+            "description": str(raw.get("description") or "")[:240],
+            "source": source,
+            "version": str(raw.get("version") or "")[:64],
+        }
+
+    async def async_upload_package(self, encoded: str) -> dict[str, Any]:
+        if len(encoded) > MAX_PACKAGE_BYTES * 2:
+            raise ValueError("Package is too large")
+        try:
+            data = base64.b64decode(encoded, validate=True)
+        except (ValueError, binascii.Error) as err:
+            raise ValueError("Invalid base64 package") from err
+        try:
+            manifest = await self.hass.async_add_executor_job(self._package_manifest, data)
+        except zipfile.BadZipFile as err:
+            raise ValueError("Invalid ZIP package") from err
+        if any(
+            app["source"] == manifest["source"] and app["id"] != manifest["id"]
+            for app in self.custom_apps.values()
+        ):
+            raise ValueError("Another app already uses this event source")
+        def _write() -> None:
+            os.makedirs(self.package_folder, exist_ok=True)
+            target = os.path.join(self.package_folder, manifest["id"] + ".zip")
+            staged = target + ".tmp"
+            with open(staged, "wb") as handle:
+                handle.write(data)
+            os.replace(staged, target)
+        await self.hass.async_add_executor_job(_write)
+        self.custom_apps[manifest["id"]] = manifest
+        self._notify_listeners()
+        return manifest
 
     async def async_apply_push_settings(self) -> None:
         """Tell the camera where to push events (or disable pushing)."""
@@ -330,11 +462,15 @@ class RecameraCoordinator:
                     self.available = False
                     self.push_error = str(err)
                     self._notify_listeners()
+                if consecutive_failures == 3 or consecutive_failures % 30 == 0:
+                    self.reachable = await self.async_probe_host()
+                    self._notify_listeners()
                 continue
 
             consecutive_failures = 0
             if not self.available:
                 self.available = True
+                self.reachable = True
                 self.push_error = ""
                 asyncio.create_task(self.async_refresh_device())
             self._process_status(status)
@@ -401,11 +537,52 @@ class RecameraCoordinator:
 
         if not isinstance(payload, dict):
             return
-        if payload.get("source") not in (DEVICE_SOURCE, None):
-            _LOGGER.debug("reCamera %s: ignoring foreign webhook payload", self.name)
+        source = payload.get("source")
+        if source not in (DEVICE_SOURCE, None):
+            if isinstance(source, str) and source in {app["source"] for app in self.custom_apps.values()}:
+                asyncio.create_task(self._handle_custom_push(payload))
+            else:
+                _LOGGER.debug("reCamera %s: ignoring foreign webhook payload", self.name)
             return
         self.push_received += 1
         asyncio.create_task(self._handle_push_payload(payload))
+
+    async def _handle_custom_push(self, payload: dict[str, Any]) -> None:
+        """Publish a custom app's event with a stable, device scoped HA contract."""
+        source = payload["source"]
+        event_type = str(payload.get("event") or "")[:64]
+        if not APP_ID.fullmatch(event_type):
+            return
+        self.app_seen_at[source] = time.monotonic()
+        self.reachable = True
+        self._notify_listeners()
+        if event_type == "heartbeat":
+            return
+        data = payload.get("data")
+        if not isinstance(data, dict):
+            data = {}
+        app = next(app for app in self.custom_apps.values() if app["source"] == source)
+        event = {
+            "device": self.name,
+            "device_id": self.device_identifier,
+            "ha_device_id": self.ha_device_id,
+            "entry_id": self.entry.entry_id,
+            "host": self.host,
+            "app_id": app["id"],
+            "source": source,
+            "event": event_type,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "data": data,
+        }
+        self.events.appendleft(event)
+        self.hass.bus.async_fire(f"{DOMAIN}_event", event)
+        if payload.get("alert") is True and self.ha_notification:
+            await self.hass.services.async_call(
+                "persistent_notification", "create",
+                {"title": f"{self.name}: {app['name']}",
+                 "message": str(payload.get("message") or event_type)[:500]},
+                blocking=False,
+            )
 
     async def _handle_push_payload(self, payload: dict[str, Any]) -> None:
         event_type = str(payload.get("event") or "")

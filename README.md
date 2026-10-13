@@ -4,7 +4,7 @@
 [![Hassfest](https://github.com/yyling0101-a11y/recamera-ha/actions/workflows/hassfest.yml/badge.svg)](https://github.com/yyling0101-a11y/recamera-ha/actions/workflows/hassfest.yml)
 [![HACS](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 
-把 Seeed **reCamera**（SG2002）的**选区运动检测**搬进 Home Assistant：在 HA 侧边栏看实时画面、直接在画面上画检测区域、运动时收到通知并自动保留当时那一帧。
+在 Home Assistant 管理多台 Seeed **reCamera SG2002**：从侧边栏添加设备、查看可达性和当前应用，并接收应用的视频与事件。首个应用是**选区运动检测**，可在 HA 中绘制检测区域、查看画面和配置告警。
 
 Brings the Seeed **reCamera** (SG2002) **region motion detection** into Home Assistant: live view in the sidebar, draw detection regions directly on the video, get notified on motion with the exact frame kept for you.
 
@@ -128,6 +128,20 @@ ffprobe rtsp://192.168.42.1:8554/live0        # H.264 1920x1080@30
 
 ## 第二步：安装集成 / Step 2: install the integration
 
+### 方式零：Home Assistant 应用中心 / Home Assistant app store
+
+在 **设置 → 应用 → 应用商店 → 仓库** 添加
+`https://github.com/yyling0101-a11y/recamera-ha`，安装 **reCamera Installer**，
+启动一次，然后重启 Home Assistant。安装器将本仓库的 `recamera` 自定义集成放进
+`/config/custom_components/recamera`；不会向设备刷入程序。
+此方式需要带 Supervisor 的 Home Assistant OS 或 Supervised 安装；
+Home Assistant Container 使用下方的 HACS 或手动安装方式。
+已经通过 HACS 管理本集成时请继续使用 HACS，安装器会拒绝覆盖它。
+
+Add the repository URL in **Settings → Apps → App store → Repositories**,
+install **reCamera Installer**, start it once, then restart Home Assistant.
+The app installs the HA integration only. Use HACS instead if HACS already manages it.
+
 ### 方式一：HACS 自定义仓库（推荐）
 
 1. HACS → 右上角 **⋮** → **Custom repositories**（自定义仓库）。
@@ -155,6 +169,43 @@ cp -a /tmp/recamera-ha/custom_components/recamera ./recamera
    设备靠这个地址回推告警。**不填也能用**，会自动退化为轮询。
    Set **Settings → System → Network → Internal URL** so the camera can push alerts back. Skipping it still works — the integration falls back to polling.
 3. 侧边栏出现 **reCamera**，点进去就是设备卡片 → **选区运动检测**。
+
+设备可以在 Solution 刷入应用前先加入 HA；此时卡片会分别显示设备是否可达、
+应用接口是否在线。每个设备都有独立的配置项、实体、推送地址和事件记录。
+
+## 自定义应用包与事件 / Custom app packages and events
+
+在设备详情页选择 **上传应用包**，上传不超过 8 MiB 的 ZIP。ZIP 根目录必须有
+`recamera-app.json`：
+
+```json
+{
+  "id": "person_detector",
+  "name": "Person detector",
+  "description": "Reports people detected in the camera view",
+  "version": "1.0.0",
+  "source": "person_detector"
+}
+```
+
+HA 将 ZIP 保存在该设备的 `.storage/recamera_packages/` 下并显示应用卡片，
+不会执行或刷写 ZIP。用 reCamera Solution 在设备上安装应用后，让应用向设备详情页
+显示的推送地址发送 JSON：
+
+```json
+{
+  "source": "person_detector",
+  "event": "person_detected",
+  "alert": true,
+  "message": "检测到人",
+  "data": { "confidence": 0.91 }
+}
+```
+
+HA 会发送 `recamera_event` 事件（包含 `entry_id`、`ha_device_id`、`app_id`、
+`event` 和 `data`）；`alert: true` 还会创建 HA 通知。
+应用可以发送 `event: "heartbeat"` 保持运行状态，卡片在最近 90 秒收到事件时显示运行中。
+运动检测应用继续使用已有的 `recamera_motion` 事件、图像和实体协议。
 
 ## 使用面板 / Using the panel
 

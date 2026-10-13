@@ -1,0 +1,16 @@
+name: reCamera Installer
+version: "1.1.0"
+slug: recamera-installer
+description: Installs the SG2002 reCamera integration into Home Assistant.
+url: https://github.com/yyling0101-a11y/recamera-ha
+arch:
+  - aarch64
+  - amd64
+startup: once
+boot: manual_only
+init: false
+panel_icon: mdi:cctv
+map:
+  - type: homeassistant_config
+    read_only: false
+    path: /config
