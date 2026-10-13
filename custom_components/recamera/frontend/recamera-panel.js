@@ -7,13 +7,30 @@
   const TEXT = {
     zh: {
       title: "reCamera",
-      subtitle: "选区运动检测 · 实时画面 · 告警与抓拍",
+      subtitle: "Seeed 智能摄像机 · 设备与应用管理",
       loading: "加载中…",
       no_devices: "还没有添加 reCamera",
       no_devices_hint: "请到「设置 → 设备与服务 → 添加集成 → reCamera」添加摄像机",
       load_failed: "无法读取 reCamera 列表",
       retry: "重试",
       add_integration: "打开集成页",
+      add_device: "添加设备",
+      add_device_title: "添加 reCamera",
+      connect_add: "连接并添加",
+      cancel: "取消",
+      connecting: "正在连接设备…",
+      device_added: "设备已添加",
+      device_removed: "设备已删除",
+      delete_device: "删除设备",
+      delete_device_confirm: "将删除该设备及其 HA 实体与事件规则，设备本身不会恢复出厂设置。",
+      err_cannot_connect: "无法连接设备，请检查 IP 和网络",
+      err_already_configured: "该设备已添加",
+      err_unknown: "未知错误",
+      field_host: "IP 地址 / 主机名",
+      field_device_name: "设备名称",
+      field_api_port: "API 端口",
+      field_rtsp_port: "RTSP 端口",
+      field_rtsp_stream: "RTSP 流名",
       card_title: "选区运动检测",
       card_open: "打开选区编辑",
       online: "在线",
@@ -90,16 +107,42 @@
       confirm_delete: "确认删除该区域？",
       dirty_hint: "有未保存的修改",
       zone_added: "已添加区域，记得点「保存选区」写入设备",
+      apps_title: "应用",
+      running_app: "当前应用",
+      app_running: "运行中",
+      app_stopped: "已停止",
+      open_app: "打开",
+      launch_app: "启动",
+      one_app_hint: "一台设备同一时间只运行一个应用",
+      app_region_motion: "选区运动检测",
+      app_region_motion_desc: "在画面上绘制检测区域，检测到运动时告警并抓拍",
     },
     en: {
       title: "reCamera",
-      subtitle: "Region motion detection · live view · alerts and snapshots",
+      subtitle: "Seeed smart camera · device & app management",
       loading: "Loading…",
       no_devices: "No reCamera added yet",
       no_devices_hint: "Go to Settings → Devices & Services → Add integration → reCamera",
       load_failed: "Cannot read the reCamera list",
       retry: "Retry",
       add_integration: "Open integrations",
+      add_device: "Add device",
+      add_device_title: "Add reCamera",
+      connect_add: "Connect & add",
+      cancel: "Cancel",
+      connecting: "Connecting…",
+      device_added: "Device added",
+      device_removed: "Device removed",
+      delete_device: "Delete device",
+      delete_device_confirm: "This removes the device and its HA entities and event rules. The device itself is not factory-reset.",
+      err_cannot_connect: "Cannot connect. Check the IP address and network.",
+      err_already_configured: "This device is already added",
+      err_unknown: "Unknown error",
+      field_host: "IP address / hostname",
+      field_device_name: "Device name",
+      field_api_port: "API port",
+      field_rtsp_port: "RTSP port",
+      field_rtsp_stream: "RTSP stream",
       card_title: "Region motion detection",
       card_open: "Open region editor",
       online: "Online",
@@ -176,6 +219,15 @@
       confirm_delete: "Delete this zone?",
       dirty_hint: "Unsaved changes",
       zone_added: "Zone added - press Save regions to write it to the camera",
+      apps_title: "Apps",
+      running_app: "Current app",
+      app_running: "Running",
+      app_stopped: "Stopped",
+      open_app: "Open",
+      launch_app: "Launch",
+      one_app_hint: "A device runs one app at a time",
+      app_region_motion: "Region motion detection",
+      app_region_motion_desc: "Draw detection zones; get alerts and snapshots on motion",
     },
   };
 
@@ -192,27 +244,51 @@
     .header h1 { font-size: 22px; font-weight: 500; margin: 0; }
     .header .sub { color: var(--secondary-text-color, #727272); font-size: 13px; }
     .spacer { flex: 1 1 auto; }
-    .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; margin-top: 16px; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; margin-top: 16px; }
     .card {
-      background: var(--card-background-color, #fff); border-radius: 12px; padding: 16px;
-      box-shadow: 0 1px 3px rgba(0,0,0,.12); cursor: pointer; transition: box-shadow .15s ease;
+      position: relative;
+      background: linear-gradient(145deg, color-mix(in srgb, var(--card-background-color, #fff) 96%, var(--primary-color, #11b6e8) 4%), var(--card-background-color, #fff));
+      border: 1px solid var(--divider-color, #e0e0e0); border-radius: 20px; padding: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.12); cursor: pointer;
+      transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
     }
-    .card:hover { box-shadow: 0 3px 10px rgba(0,0,0,.18); }
-    .card h2 { margin: 0 0 4px; font-size: 17px; font-weight: 500; }
-    .card .dev { color: var(--secondary-text-color, #727272); font-size: 12px; margin-bottom: 12px; }
-    .thumb {
-      width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 8px;
-      background: #000 center/cover no-repeat; display: block;
+    .card:hover { transform: translateY(-3px); box-shadow: 0 10px 26px rgba(0,0,0,.2); border-color: color-mix(in srgb, var(--primary-color, #11b6e8) 45%, var(--divider-color, #e0e0e0)); }
+    .card h2 { margin: 0 0 4px; font-size: 17px; font-weight: 600; }
+    .device-card { padding: 0; overflow: hidden; min-height: 200px; }
+    .device-visual {
+      height: 92px; display: flex; align-items: center; padding: 0 20px;
+      background: linear-gradient(110deg, color-mix(in srgb, var(--primary-color, #11b6e8) 26%, transparent), color-mix(in srgb, var(--primary-color, #11b6e8) 8%, transparent));
+      border-bottom: 1px solid var(--divider-color, rgba(127,127,127,.18));
     }
+    .camera-mark {
+      width: 58px; height: 58px; border-radius: 16px; display: grid; place-items: center;
+      background: var(--card-background-color, #fff); color: var(--primary-color, #11b6e8);
+      box-shadow: 0 10px 24px color-mix(in srgb, var(--primary-color, #11b6e8) 30%, transparent);
+    }
+    .camera-mark svg { width: 34px; height: 34px; display: block; }
+    .device-body { padding: 16px 18px 18px; }
+    .name { font-size: 17px; font-weight: 600; }
+    .host { font: 12px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; color: var(--secondary-text-color, #8fa2b5); margin-top: 4px; }
+    .meta { color: var(--secondary-text-color, #727272); font-size: 13px; margin-top: 8px; }
+    .chip-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
     .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
     .chip {
-      border-radius: 999px; padding: 3px 10px; font-size: 12px; line-height: 18px;
-      background: var(--secondary-background-color, #e5e5e5); color: var(--primary-text-color, #212121);
+      display: inline-flex; align-items: center; gap: 7px;
+      border: 1px solid var(--divider-color, #e0e0e0);
+      background: color-mix(in srgb, var(--secondary-background-color, #eee) 55%, transparent);
+      border-radius: 999px; padding: 4px 10px; font-size: 12px; line-height: 18px;
+      color: var(--secondary-text-color, #727272); white-space: nowrap;
     }
-    .chip.ok { background: rgba(67,160,71,.16); color: #2e7d32; }
-    .chip.warn { background: rgba(255,167,38,.18); color: #b26a00; }
-    .chip.bad { background: rgba(229,57,53,.14); color: #c62828; }
-    .chip.live { background: rgba(229,57,53,.9); color: #fff; }
+    .chip.ok { color: #2e9e5b; border-color: rgba(53,208,127,.4); background: rgba(53,208,127,.12); }
+    .chip.warn { color: #b26a00; border-color: rgba(255,184,77,.45); background: rgba(255,184,77,.14); }
+    .chip.bad { color: #d24a52; border-color: rgba(255,98,108,.45); background: rgba(255,98,108,.12); }
+    .chip.live { color: #fff; border-color: transparent; background: rgba(229,57,53,.9); }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--secondary-text-color, #8fa2b5); display: inline-block; flex: 0 0 auto; }
+    .dot.ok { background: #35d07f; box-shadow: 0 0 0 3px rgba(53,208,127,.14); }
+    .dot.bad { background: #ff626c; box-shadow: 0 0 0 3px rgba(255,98,108,.14); }
+    .dot.warn { background: #ffb84d; box-shadow: 0 0 0 3px rgba(255,184,77,.14); }
+    .preview-stage { position: relative; width: 100%; max-width: 720px; max-height: 420px; aspect-ratio: 16 / 9; background: #000; border-radius: 12px; overflow: hidden; margin: 0 auto; }
+    .preview-stage img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; }
     .empty {
       margin-top: 24px; padding: 24px; text-align: center; border-radius: 12px;
       background: var(--card-background-color, #fff); color: var(--secondary-text-color, #727272);
@@ -267,12 +343,44 @@
     .switch .txt { flex: 1 1 auto; }
     .switch .txt b { display: block; font-weight: 500; }
     code { background: var(--secondary-background-color, #eee); padding: 1px 5px; border-radius: 4px; word-break: break-all; }
+    .overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 60;
+      display: flex; align-items: center; justify-content: center; padding: 16px;
+    }
+    .modal {
+      width: 100%; max-width: 420px; background: var(--card-background-color, #fff);
+      border-radius: 14px; padding: 20px; box-shadow: 0 8px 30px rgba(0,0,0,.35);
+      color: var(--primary-text-color, #212121);
+    }
+    .modal h2 { margin: 0 0 14px; font-size: 18px; font-weight: 500; }
+    .field { display: block; margin-bottom: 12px; }
+    .field span { display: block; font-size: 12px; color: var(--secondary-text-color, #727272); margin-bottom: 4px; }
+    .field input[type="text"], .field input[type="number"], .field select { width: 100%; }
+    .field input[type="checkbox"] { width: auto; }
+    .modal .actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px; }
+    .error { background: rgba(229,57,53,.12); color: #c62828; border-radius: 8px; padding: 8px 10px; font-size: 13px; margin-bottom: 12px; }
+    .card { position: relative; }
+    .card .del {
+      position: absolute; top: 12px; right: 12px; width: 30px; height: 30px; padding: 0; z-index: 2;
+      border-radius: 50%; background: color-mix(in srgb, var(--card-background-color, #fff) 80%, transparent);
+      color: var(--secondary-text-color, #727272); border: 1px solid var(--divider-color, #e0e0e0);
+      display: flex; align-items: center; justify-content: center; font-size: 14px; line-height: 1;
+      backdrop-filter: blur(4px);
+    }
+    .card .del:hover { background: rgba(229,57,53,.16); color: #c62828; border-color: rgba(229,57,53,.4); }
+    .app-card { display: flex; flex-direction: column; gap: 8px; }
+    .app-card .app-icon { font-size: 26px; line-height: 1; }
+    .app-card .app-actions { margin-top: 4px; }
+    .app-card.stopped { opacity: .8; }
     .toast {
       position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%);
       background: #323232; color: #fff; padding: 10px 18px; border-radius: 8px; z-index: 50;
       box-shadow: 0 3px 12px rgba(0,0,0,.3); font-size: 13px;
     }
   `;
+
+  const CAMERA_SVG =
+    '<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M3 7.4 11.4 2.5 21 7.8v8.5l-9.4 5.2L3 16.5V7.4m8.4-2.6L5.6 8.2l5.9 3.3L18 7.9l-6.6-3.1M5 9.8v5.6l6.5 3.7v-5.7L5 9.8m8.2 3.4v5.6l5.8-3.3V10l-5.8 3.2M8.3 11a3.1 3.1 0 1 0 0 6.2 3.1 3.1 0 0 0 0-6.2m0 1.5a1.6 1.6 0 1 1 0 3.2 1.6 1.6 0 0 1 0-3.2"/></svg>';
 
   const h = (tag, props, ...children) => {
     const node = document.createElement(tag);
@@ -310,6 +418,12 @@
       this._pointer = null;
       this._token = "";
       this._loadError = "";
+      this._addFlow = null;
+      this._addModalEl = null;
+      this._addError = "";
+      this._view = "home";
+      this._previewImg = null;
+      this._previewTimer = null;
     }
 
     connectedCallback() {
@@ -328,7 +442,10 @@
       this._lang = String(value.language || "en").toLowerCase().startsWith("zh") ? "zh" : "en";
       if (!this._built && this.isConnected) this._build();
       if (!this._booted && this._built) this._boot();
-      if (tokenChanged && this._img && this._state) this._startStream();
+      if (tokenChanged && this._state) {
+        if (this._view === "app" && this._img) this._startStream();
+        else if (this._view === "device" && this._previewImg) this._startPreview();
+      }
     }
 
     t(key) {
@@ -381,6 +498,7 @@
         const still = this._devices.find((device) => device.entry_id === this._state.entry_id);
         if (!still) {
           this._state = null;
+          this._view = "home";
           this._stopTimers();
         }
       }
@@ -389,13 +507,24 @@
 
     _render() {
       if (!this._built) return;
-      this._root.replaceChildren(this._state ? this._editorView() : this._homeView());
-      if (this._state) {
+      let view;
+      if (this._view === "app" && this._state) view = this._editorView();
+      else if (this._view === "device" && this._state) view = this._deviceView();
+      else view = this._homeView();
+      this._root.replaceChildren(view);
+      this._stopPolling();
+      if (this._streamTimer) {
+        clearTimeout(this._streamTimer);
+        this._streamTimer = null;
+      }
+      this._resizeObserver?.disconnect();
+      this._stopPreview();
+      if (this._view === "app" && this._state) {
         this._startStream();
         this._applyState();
         this._startPolling();
-      } else {
-        this._stopTimers();
+      } else if (this._view === "device" && this._state) {
+        this._startPreview();
       }
     }
 
@@ -406,6 +535,7 @@
         h("h1", {}, this.t("title")),
         h("span", { class: "sub" }, this.t("subtitle")),
         h("span", { class: "spacer" }),
+        h("button", { onclick: () => this._openAddDevice() }, this.t("add_device")),
         h(
           "button",
           {
@@ -437,7 +567,8 @@
                 "div",
                 { class: "empty" },
                 h("div", {}, this.t("no_devices")),
-                h("div", { class: "hint" }, this.t("no_devices_hint"))
+                h("div", { class: "hint" }, this.t("no_devices_hint")),
+                h("button", { style: { marginTop: "14px" }, onclick: () => this._openAddDevice() }, this.t("add_device"))
               )
         );
       }
@@ -447,43 +578,224 @@
     }
 
     _deviceCard(device) {
-      const entities = device.entities || {};
-      const thumbUrl = entities.camera
-        ? `/api/camera_proxy/${entities.camera}?token=${this._stillToken(entities.camera)}`
+      const running = (device.apps || []).find((app) => app.running);
+      const runningLabel = running
+        ? this.t(running.name_key) !== running.name_key
+          ? this.t(running.name_key)
+          : running.id
         : null;
       const chips = [
-        h("span", { class: `chip ${device.available ? "ok" : "bad"}` }, device.available ? this.t("online") : this.t("offline")),
-        device.motion ? h("span", { class: "chip live" }, this.t("motion")) : h("span", { class: "chip" }, this.t("idle")),
         h(
           "span",
-          { class: `chip ${device.configured ? "" : "warn"}` },
-          device.configured ? `${device.zone_count} ${this.t("zones_count")}` : this.t("zones_none")
+          { class: "chip" },
+          h("i", { class: `dot ${device.available ? "ok" : "bad"}` }),
+          device.available ? this.t("online") : this.t("offline")
         ),
+        running
+          ? h("span", { class: "chip" }, h("i", { class: "dot ok" }), runningLabel)
+          : h("span", { class: "chip" }, h("i", { class: "dot" }), this.t("app_stopped")),
         h("span", { class: "chip" }, device.enabled ? this.t("detection_on") : this.t("detection_off")),
       ];
       if (device.legacy_device) chips.push(h("span", { class: "chip warn" }, "legacy"));
 
       return h(
         "div",
-        { class: "card", onclick: () => this._openDevice(device.entry_id) },
-        h("h2", {}, this.t("card_title")),
-        h("div", { class: "dev" }, `${device.name} · ${device.host}:${device.api_port}`),
-        thumbUrl
-          ? h("img", { class: "thumb", src: thumbUrl, alt: device.name, loading: "lazy" })
-          : h("div", { class: "thumb" }),
-        h("div", { class: "chips" }, chips),
+        { class: "card device-card", onclick: () => this._openDevice(device.entry_id) },
+        h(
+          "button",
+          {
+            class: "del",
+            title: this.t("delete_device"),
+            onclick: (event) => {
+              event.stopPropagation();
+              this._deleteDevice(device.entry_id);
+            },
+          },
+          "✕"
+        ),
+        h("div", { class: "device-visual" }, h("div", { class: "camera-mark", html: CAMERA_SVG })),
         h(
           "div",
-          { class: "hint", style: { marginTop: "10px" } },
-          `${this.t("last_motion")}: ${device.last_motion_at ? new Date(device.last_motion_at).toLocaleString() : this.t("never")}`
-        ),
-        device.legacy_device ? h("div", { class: "hint", style: { marginTop: "6px", color: "#b26a00" } }, this.t("legacy_hint")) : null
+          { class: "device-body" },
+          h("div", { class: "name" }, device.name),
+          h("div", { class: "host" }, `${device.host}:${device.api_port}`),
+          h("div", { class: "meta" }, `${this.t("running_app")}: ${runningLabel || this.t("app_stopped")}`),
+          h("div", { class: "chip-row" }, chips)
+        )
       );
     }
 
     _stillToken(entityId) {
       const state = this._hass?.states?.[entityId];
       return state?.attributes?.access_token || "";
+    }
+
+    // ------------------------------------------------- multi-device manage
+    _flowError(errors) {
+      const key = errors?.base || Object.values(errors || {})[0];
+      if (!key) return "";
+      const mapped = this.t(`err_${key}`);
+      return mapped !== `err_${key}` ? mapped : key;
+    }
+
+    _abortReason(reason) {
+      if (!reason) return this.t("err_unknown");
+      const key = `err_${reason}`;
+      const mapped = this.t(key);
+      return mapped !== key ? mapped : reason;
+    }
+
+    async _openAddDevice() {
+      this._addError = "";
+      try {
+        this._addFlow = await this._hass.callApi("POST", "config/config_entries/flow", {
+          handler: "recamera",
+          show_advanced_options: false,
+        });
+        this._renderAddModal();
+      } catch (error) {
+        this.toast(String(error?.body?.message || error?.message || error), "bad");
+      }
+    }
+
+    _schemaField(field) {
+      const name = field.name;
+      const labelKey = `field_${name}`;
+      const label = this.t(labelKey) !== labelKey ? this.t(labelKey) : name;
+      const suffix = field.required ? " *" : "";
+      let input;
+      if (field.type === "boolean") {
+        input = h("input", { type: "checkbox", name, ...(field.default ? { checked: "true" } : {}) });
+      } else if (field.type === "integer" || field.type === "float") {
+        input = h("input", {
+          type: "number",
+          name,
+          value: field.default ?? "",
+          ...(field.valueMin != null ? { min: String(field.valueMin) } : {}),
+          ...(field.valueMax != null ? { max: String(field.valueMax) } : {}),
+        });
+      } else if (field.type === "select") {
+        input = h(
+          "select",
+          { name },
+          (field.options || []).map((option) => {
+            const value = typeof option === "object" ? option.value : option;
+            const text = typeof option === "object" ? option.label : option;
+            return h("option", { value: String(value) }, text);
+          })
+        );
+      } else {
+        input = h("input", { type: "text", name, value: field.default ?? "" });
+      }
+      return h("label", { class: "field" }, h("span", {}, label + suffix), input);
+    }
+
+    _renderAddModal() {
+      this._closeAddModal();
+      const flow = this._addFlow;
+      const errText = this._addError || this._flowError(flow.errors || {});
+      const fields = (flow.data_schema || []).map((field) => this._schemaField(field));
+      const overlay = h(
+        "div",
+        { class: "overlay" },
+        h(
+          "div",
+          { class: "modal" },
+          h("h2", {}, this.t("add_device_title")),
+          errText ? h("div", { class: "error" }, errText) : null,
+          h(
+            "form",
+            {
+              onsubmit: (event) => {
+                event.preventDefault();
+                this._submitAddDevice();
+              },
+            },
+            fields,
+            h(
+              "div",
+              { class: "actions" },
+              h("button", { type: "button", class: "ghost", onclick: () => this._cancelAdd() }, this.t("cancel")),
+              h("button", { type: "submit" }, this.t("connect_add"))
+            )
+          )
+        )
+      );
+      this._addModalEl = overlay;
+      this.shadowRoot.appendChild(overlay);
+    }
+
+    async _submitAddDevice() {
+      const form = this._addModalEl.querySelector("form");
+      const userInput = {};
+      form.querySelectorAll("[name]").forEach((element) => {
+        if (element.type === "checkbox") userInput[element.name] = element.checked;
+        else if (element.type === "number") {
+          if (element.value !== "") userInput[element.name] = Number(element.value);
+        } else if (element.value !== "") userInput[element.name] = element.value;
+      });
+      const button = form.querySelector('[type="submit"]');
+      button.disabled = true;
+      button.textContent = this.t("connecting");
+      this._addError = "";
+      try {
+        const result = await this._hass.callApi(
+          "POST",
+          `config/config_entries/flow/${this._addFlow.flow_id}`,
+          userInput
+        );
+        if (result.type === "create_entry") {
+          this._closeAddModal();
+          this.toast(this.t("device_added"));
+          setTimeout(() => this._loadDevices(), 1200);
+        } else if (result.type === "abort") {
+          // The flow finished (e.g. already_configured). Show the reason and
+          // start a fresh flow so the user can correct the input and retry.
+          this._addError = this._abortReason(result.reason);
+          try {
+            this._addFlow = await this._hass.callApi("POST", "config/config_entries/flow", {
+              handler: "recamera",
+              show_advanced_options: false,
+            });
+          } catch {
+            // keep the finished flow; the error is still shown
+          }
+          this._renderAddModal();
+        } else {
+          this._addFlow = result;
+          this._renderAddModal();
+        }
+      } catch (error) {
+        this._addError = String(error?.body?.message || error?.message || error);
+        this._renderAddModal();
+      }
+    }
+
+    _closeAddModal() {
+      if (this._addModalEl) {
+        this._addModalEl.remove();
+        this._addModalEl = null;
+      }
+    }
+
+    _cancelAdd() {
+      const flowId = this._addFlow?.flow_id;
+      this._closeAddModal();
+      if (flowId) {
+        this._hass.callApi("DELETE", `config/config_entries/flow/${flowId}`).catch(() => {});
+      }
+    }
+
+    async _deleteDevice(entryId) {
+      if (!window.confirm(this.t("delete_device_confirm"))) return;
+      try {
+        await this._hass.callApi("DELETE", `config/config_entries/entry/${entryId}`);
+        this.toast(this.t("device_removed"));
+        if (this._state && this._state.entry_id === entryId) this._state = null;
+        this._loadDevices();
+      } catch (error) {
+        this.toast(String(error?.body?.message || error?.message || error), "bad");
+      }
     }
 
     async _openDevice(entryId) {
@@ -493,10 +805,17 @@
       } catch (error) {
         this.toast(String(error?.message || error), "bad");
         this._state = null;
+        this._view = "home";
         this._render();
         return;
       }
+      this._view = "device";
+      this._render();
+    }
+
+    _openApp() {
       this._adoptDeviceState();
+      this._view = "app";
       this._render();
     }
 
@@ -521,6 +840,108 @@
       this._draft = [];
       this._selected = null;
       this._dirty = false;
+    }
+
+    // ---------------------------------------------------------- device view
+    _runningAppLine(device) {
+      const running = (device.apps || []).find((app) => app.running);
+      if (!running) return h("div", { class: "hint", style: { marginTop: "6px" } }, this.t("app_stopped"));
+      const label = this.t(running.name_key) !== running.name_key ? this.t(running.name_key) : running.id;
+      return h("div", { class: "hint", style: { marginTop: "6px" } }, `${this.t("running_app")}: ${label}`);
+    }
+
+    _deviceView() {
+      const state = this._state;
+      const apps = state.apps || [];
+      const chips = [
+        h(
+          "span",
+          { class: "chip" },
+          h("i", { class: `dot ${state.available ? "ok" : "bad"}` }),
+          state.available ? this.t("online") : this.t("offline")
+        ),
+        state.motion ? h("span", { class: "chip live" }, this.t("motion")) : h("span", { class: "chip" }, this.t("idle")),
+        h("span", { class: "chip" }, state.enabled ? this.t("detection_on") : this.t("detection_off")),
+      ];
+      const header = h(
+        "div",
+        { class: "header" },
+        h("button", { class: "ghost", onclick: () => this._backHome() }, `‹ ${this.t("back")}`),
+        h("h1", {}, state.name),
+        h("span", { class: "sub" }, `${state.host}:${state.api_port}`),
+        h("span", { class: "spacer" }),
+        h("button", { class: "ghost", onclick: () => this._openDevice(state.entry_id) }, this.t("refresh"))
+      );
+      return h(
+        "div",
+        {},
+        header,
+        h("div", { class: "chip-row", style: { marginTop: "10px" } }, chips),
+        h(
+          "div",
+          { class: "panel", style: { marginTop: "16px" } },
+          h("h3", {}, this.t("live")),
+          h(
+            "div",
+            { class: "preview-stage" },
+            (this._previewImg = h("img", { alt: state.name, onerror: () => this._onPreviewError() }))
+          ),
+          h("div", { class: "hint", style: { marginTop: "8px" } }, this.t("stream_hint"))
+        ),
+        h("h3", { style: { margin: "18px 0 4px", fontSize: "15px", fontWeight: "500" } }, this.t("apps_title")),
+        h("div", { class: "hint", style: { marginBottom: "10px" } }, this.t("one_app_hint")),
+        h("div", { class: "cards" }, apps.map((app) => this._appCard(app)))
+      );
+    }
+
+    _startPreview() {
+      if (this._previewTimer) {
+        clearTimeout(this._previewTimer);
+        this._previewTimer = null;
+      }
+      const entities = this._state?.entities || {};
+      const camera = entities.camera;
+      if (!this._previewImg) return;
+      if (!camera) {
+        this._previewImg.removeAttribute("src");
+        return;
+      }
+      const token = this._stillToken(camera);
+      this._previewImg.src = `/api/camera_proxy_stream/${camera}${token ? `?token=${token}` : ""}`;
+    }
+
+    _onPreviewError() {
+      if (this._previewTimer) clearTimeout(this._previewTimer);
+      this._previewTimer = setTimeout(() => this._startPreview(), 4000);
+    }
+
+    _stopPreview() {
+      if (this._previewTimer) {
+        clearTimeout(this._previewTimer);
+        this._previewTimer = null;
+      }
+      if (this._previewImg) this._previewImg.removeAttribute("src");
+    }
+
+    _appCard(app) {
+      const label = this.t(app.name_key) !== app.name_key ? this.t(app.name_key) : app.id;
+      const desc = this.t(app.description_key) !== app.description_key ? this.t(app.description_key) : "";
+      const running = app.running;
+      return h(
+        "div",
+        { class: `card app-card${running ? "" : " stopped"}`, onclick: running ? () => this._openApp() : null },
+        h("div", { class: "app-icon" }, "▦"),
+        h("h2", {}, label),
+        desc ? h("div", { class: "hint" }, desc) : null,
+        h("div", { class: "chips" }, h("span", { class: `chip ${running ? "ok" : ""}` }, running ? this.t("app_running") : this.t("app_stopped"))),
+        h(
+          "div",
+          { class: "app-actions" },
+          running
+            ? h("button", { onclick: (event) => { event.stopPropagation(); this._openApp(); } }, this.t("open_app"))
+            : h("button", { class: "ghost" }, this.t("launch_app"))
+        )
+      );
     }
 
     // --------------------------------------------------------------- editor
@@ -775,6 +1196,7 @@
       if (this._streamTimer) clearTimeout(this._streamTimer);
       this._streamTimer = null;
       this._resizeObserver?.disconnect();
+      this._stopPreview();
     }
 
     async _poll() {
@@ -1220,9 +1642,18 @@
 
     _closeDevice() {
       this._stopTimers();
+      this._img = null;
+      this._canvas = null;
+      this._view = "device";
+      this._render();
+    }
+
+    _backHome() {
+      this._stopTimers();
       this._state = null;
       this._img = null;
       this._canvas = null;
+      this._view = "home";
       this._loadDevices();
     }
   }

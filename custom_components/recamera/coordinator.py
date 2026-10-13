@@ -138,6 +138,24 @@ class RecameraCoordinator:
             self._ha_device_id = device.id if device else None
         return self._ha_device_id
 
+    @property
+    def apps(self) -> list[dict[str, Any]]:
+        """Applications available on this device.
+
+        A device runs a single application at a time; the panel lists them on
+        the device page and opens the running one. Region motion detection is
+        the first (and currently only) app, deployed as the on-device program.
+        """
+
+        return [
+            {
+                "id": "region_motion",
+                "name_key": "app_region_motion",
+                "description_key": "app_region_motion_desc",
+                "running": bool(self.available),
+            }
+        ]
+
     def as_dict(self) -> dict[str, Any]:
         """Serialisable view used by the sidebar panel."""
 
@@ -176,6 +194,7 @@ class RecameraCoordinator:
             "last_image_url": self.last_image_url,
             "analysis_width": self.status.get("analysis_width"),
             "analysis_height": self.status.get("analysis_height"),
+            "apps": self.apps,
         }
 
     # ------------------------------------------------------------- lifecycle
