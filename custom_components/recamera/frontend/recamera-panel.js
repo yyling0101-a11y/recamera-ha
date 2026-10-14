@@ -288,7 +288,28 @@
     }
     .view { max-width: 1440px; margin: 0 auto; }
     @media (max-width: 700px) { .wrap { padding: 22px 14px 92px; } }
-    .header { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; flex-wrap: wrap; }
+    .global-language { position: fixed; top: 24px; right: 30px; z-index: 12; }
+    .lang-switch {
+      display: inline-flex; padding: 3px; border: 1px solid var(--divider-color);
+      border-radius: 11px; background: rgba(12,19,27,.88);
+      box-shadow: 0 8px 24px rgba(0,0,0,.22); backdrop-filter: blur(10px);
+    }
+    .lang-switch button {
+      border: 0; background: transparent; color: var(--secondary-text-color);
+      border-radius: 8px; padding: 7px 11px; cursor: pointer;
+      font-size: 12px; font-weight: 700; transition: .18s;
+    }
+    .lang-switch button:hover { color: #fff; }
+    .lang-switch button.active {
+      background: linear-gradient(135deg, rgba(17,182,232,.3), rgba(45,120,255,.34));
+      color: #fff; box-shadow: 0 2px 9px rgba(17,182,232,.18);
+    }
+    @media (max-width: 700px) {
+      .global-language { top: 14px; right: 14px; }
+      .lang-switch button { padding: 6px 9px; }
+    }
+    .header { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; flex-wrap: wrap; padding-right: 118px; }
+    @media (max-width: 700px) { .header { padding-right: 92px; } }
     .header h1 { font-size: clamp(24px,2.4vw,34px); font-weight: 700; letter-spacing: -.035em; margin: 0; }
     .header .sub { color: var(--secondary-text-color, #727272); font-size: 13px; }
     .spacer { flex: 1 1 auto; }
@@ -474,6 +495,13 @@
       this._previewTimer = null;
       this._homeTimer = null;
       this._selectedApp = null;
+      try {
+        const savedLanguage = window.localStorage.getItem("recamera-language");
+        this._langChoice = savedLanguage === "zh" || savedLanguage === "en" ? savedLanguage : null;
+      } catch (_) {
+        this._langChoice = null;
+      }
+      this._lang = this._langChoice || "en";
     }
 
     connectedCallback() {
@@ -492,9 +520,16 @@
       if (!value) return;
       const tokenChanged = this._token !== value.auth?.accessToken;
       this._hass = value;
-      this._lang = String(value.language || "en").toLowerCase().startsWith("zh") ? "zh" : "en";
+      const nextLanguage = this._langChoice ||
+        (String(value.language || "en").toLowerCase().startsWith("zh") ? "zh" : "en");
+      const languageChanged = this._lang !== nextLanguage;
+      this._lang = nextLanguage;
       if (!this._built && this.isConnected) this._build();
       if (!this._booted && this._built) this._boot();
+      if (languageChanged && this._built) {
+        this._updateLanguageSwitch();
+        if (this._booted) this._render();
+      }
       if (tokenChanged && this._state) {
         if (this._view === "app" && this._img) this._startStream();
         else if (this._view === "device" && this._previewImg) this._startPreview();
@@ -505,13 +540,44 @@
       return (TEXT[this._lang] || TEXT.en)[key] || TEXT.en[key] || key;
     }
 
+    _appName(app) {
+      if (app.id === "region_motion") return this.t("app_region_motion");
+      return app.name || (this.t(app.name_key) !== app.name_key ? this.t(app.name_key) : app.id);
+    }
+
+    _appDescription(app) {
+      if (app.id === "region_motion") return this.t("app_region_motion_desc");
+      return app.description || (this.t(app.description_key) !== app.description_key ? this.t(app.description_key) : "");
+    }
+
+    _setLanguage(language) {
+      if (language !== "zh" && language !== "en") return;
+      this._langChoice = language;
+      this._lang = language;
+      try { window.localStorage.setItem("recamera-language", language); } catch (_) { /* Private browsing. */ }
+      this._updateLanguageSwitch();
+      this._render();
+    }
+
+    _updateLanguageSwitch() {
+      this._languageSwitch?.querySelectorAll("button").forEach((button) => {
+        const active = button.dataset.lang === this._lang;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-pressed", String(active));
+      });
+    }
+
     // ---------------------------------------------------------------- shell
     _build() {
       this._built = true;
       const style = document.createElement("style");
       style.textContent = STYLE;
       this._root = h("div", { class: "wrap" });
-      this.shadowRoot.replaceChildren(style, this._root);
+      this._languageSwitch = h("div", { class: "global-language lang-switch", role: "group", "aria-label": "Language / 语言" },
+        h("button", { type: "button", "data-lang": "zh", onclick: () => this._setLanguage("zh") }, "中"),
+        h("button", { type: "button", "data-lang": "en", onclick: () => this._setLanguage("en") }, "EN"));
+      this.shadowRoot.replaceChildren(style, this._root, this._languageSwitch);
+      this._updateLanguageSwitch();
       this._root.appendChild(h("div", { class: "view" }, this.t("loading")));
     }
 
@@ -641,11 +707,7 @@
 
     _deviceCard(device) {
       const running = (device.apps || []).find((app) => app.running);
-      const runningLabel = running
-        ? running.name || (this.t(running.name_key) !== running.name_key
-          ? this.t(running.name_key)
-          : running.id)
-        : null;
+      const runningLabel = running ? this._appName(running) : null;
       const chips = [
         h(
           "span",
@@ -919,7 +981,7 @@
     _runningAppLine(device) {
       const running = (device.apps || []).find((app) => app.running);
       if (!running) return h("div", { class: "hint", style: { marginTop: "6px" } }, this.t("app_stopped"));
-      const label = this.t(running.name_key) !== running.name_key ? this.t(running.name_key) : running.id;
+      const label = this._appName(running);
       return h("div", { class: "hint", style: { marginTop: "6px" } }, `${this.t("running_app")}: ${label}`);
     }
 
@@ -1095,8 +1157,8 @@
     }
 
     _appCard(app) {
-      const label = app.name || (this.t(app.name_key) !== app.name_key ? this.t(app.name_key) : app.id);
-      const desc = app.description || (this.t(app.description_key) !== app.description_key ? this.t(app.description_key) : "");
+      const label = this._appName(app);
+      const desc = this._appDescription(app);
       const running = app.running;
       const open = () => {
         if (app.id === "region_motion") {
