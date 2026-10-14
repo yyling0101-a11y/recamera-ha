@@ -281,11 +281,13 @@
     }
     * { box-sizing: border-box; }
     .wrap {
-      height: 100%; overflow: auto; padding: 16px;
+      height: 100%; overflow: auto; padding: 32px clamp(18px, 3vw, 42px) 100px;
       background: radial-gradient(circle at 78% -8%, rgba(17,182,232,.13), transparent 30%), radial-gradient(circle at 5% 25%, rgba(45,120,255,.09), transparent 28%), var(--primary-background-color);
       color: var(--primary-text-color, #212121);
       font: 14px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
     }
+    .view { max-width: 1440px; margin: 0 auto; }
+    @media (max-width: 700px) { .wrap { padding: 22px 14px 92px; } }
     .header { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; flex-wrap: wrap; }
     .header h1 { font-size: clamp(24px,2.4vw,34px); font-weight: 700; letter-spacing: -.035em; margin: 0; }
     .header .sub { color: var(--secondary-text-color, #727272); font-size: 13px; }
@@ -510,7 +512,7 @@
       style.textContent = STYLE;
       this._root = h("div", { class: "wrap" });
       this.shadowRoot.replaceChildren(style, this._root);
-      this._root.appendChild(h("div", {}, this.t("loading")));
+      this._root.appendChild(h("div", { class: "view" }, this.t("loading")));
     }
 
     async _boot() {
@@ -571,7 +573,7 @@
       else if (this._view === "app" && this._state) view = this._editorView();
       else if (this._view === "device" && this._state) view = this._deviceView();
       else view = this._homeView();
-      this._root.replaceChildren(view);
+      this._root.replaceChildren(h("div", { class: "view" }, view));
       this._stopPolling();
       if (this._streamTimer) {
         clearTimeout(this._streamTimer);
@@ -870,7 +872,7 @@
     }
 
     async _openDevice(entryId) {
-      this._root.replaceChildren(h("div", { class: "wrap" }, this.t("loading")));
+      this._root.replaceChildren(h("div", { class: "view" }, this.t("loading")));
       try {
         this._state = await this.ws("state", { entry_id: entryId });
       } catch (error) {
