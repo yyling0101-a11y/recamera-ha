@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "添加 reCamera",
-        "description": "填写正在运行选区运动检测程序的 reCamera 地址，保存前 Home Assistant 会先连接设备校验。",
+        "description": "填写 reCamera 地址；可以先添加设备，再用 reCamera Solution 安装应用。",
         "data": {
           "host": "主机（IP 地址）",
           "device_name": "名称",
@@ -21,6 +21,7 @@
       }
     },
     "error": {
+      "invalid_host": "请输入有效的 IP 地址或主机名。",
       "cannot_connect": "无法连接运动检测 API。请确认地址正确、程序正在运行，且 Home Assistant 与摄像机网络互通。",
       "unknown": "连接摄像机时发生未知错误。"
     },

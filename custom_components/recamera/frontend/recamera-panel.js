@@ -24,6 +24,7 @@
       delete_device: "删除设备",
       delete_device_confirm: "将删除该设备及其 HA 实体与事件规则，设备本身不会恢复出厂设置。",
       err_cannot_connect: "无法连接设备，请检查 IP 和网络",
+      err_invalid_host: "请输入有效的 IP 地址或主机名",
       err_already_configured: "该设备已添加",
       err_unknown: "未知错误",
       field_host: "IP 地址 / 主机名",
@@ -146,6 +147,7 @@
       delete_device: "Delete device",
       delete_device_confirm: "This removes the device and its HA entities and event rules. The device itself is not factory-reset.",
       err_cannot_connect: "Cannot connect. Check the IP address and network.",
+      err_invalid_host: "Enter a valid IP address or hostname",
       err_already_configured: "This device is already added",
       err_unknown: "Unknown error",
       field_host: "IP address / hostname",
@@ -694,6 +696,12 @@
       return mapped !== key ? mapped : reason;
     }
 
+    _apiErrorText(error) {
+      const candidates = [error?.body?.message, error?.message, error?.body?.error];
+      const message = candidates.find((value) => typeof value === "string" && value.trim());
+      return message || (error?.status ? `HTTP ${error.status}` : this.t("err_unknown"));
+    }
+
     async _openAddDevice() {
       this._addError = "";
       try {
@@ -703,7 +711,7 @@
         });
         this._renderAddModal();
       } catch (error) {
-        this.toast(String(error?.body?.message || error?.message || error), "bad");
+        this.toast(this._apiErrorText(error), "bad");
       }
     }
 
@@ -815,7 +823,7 @@
           this._renderAddModal();
         }
       } catch (error) {
-        this._addError = String(error?.body?.message || error?.message || error);
+        this._addError = this._apiErrorText(error);
         this._renderAddModal();
       }
     }

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 import voluptuous as vol
@@ -39,6 +40,21 @@ from .const import (
 from .device_client import RecameraDeviceError, async_validate_device
 
 _LOGGER = logging.getLogger(__name__)
+_HOST_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9.-]*$")
+
+USER_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_HOST): str,
+        vol.Optional(CONF_DEVICE_NAME, default=DEFAULT_DEVICE_NAME): str,
+        vol.Optional(CONF_API_PORT, default=DEFAULT_API_PORT): vol.All(
+            vol.Coerce(int), vol.Range(min=1, max=65535)
+        ),
+        vol.Optional(CONF_RTSP_PORT, default=DEFAULT_RTSP_PORT): vol.All(
+            vol.Coerce(int), vol.Range(min=1, max=65535)
+        ),
+        vol.Optional(CONF_RTSP_STREAM, default=DEFAULT_RTSP_STREAM): str,
+    }
+)
 
 
 class RecameraConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -58,6 +74,11 @@ class RecameraConfigFlow(ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             host = str(user_input[CONF_HOST]).strip()
+            if not _HOST_RE.fullmatch(host):
+                return self.async_show_form(
+                    step_id="user", data_schema=USER_SCHEMA,
+                    errors={CONF_HOST: "invalid_host"},
+                )
             port = int(user_input.get(CONF_API_PORT) or DEFAULT_API_PORT)
             name = str(user_input.get(CONF_DEVICE_NAME) or "").strip() or DEFAULT_DEVICE_NAME
 
@@ -102,20 +123,7 @@ class RecameraConfigFlow(ConfigFlow, domain=DOMAIN):
                 },
             )
 
-        schema = vol.Schema(
-            {
-                vol.Required(CONF_HOST): vol.All(str, vol.Match(r"^[A-Za-z0-9][A-Za-z0-9.-]*$")),
-                vol.Optional(CONF_DEVICE_NAME, default=DEFAULT_DEVICE_NAME): str,
-                vol.Optional(CONF_API_PORT, default=DEFAULT_API_PORT): vol.All(
-                    vol.Coerce(int), vol.Range(min=1, max=65535)
-                ),
-                vol.Optional(CONF_RTSP_PORT, default=DEFAULT_RTSP_PORT): vol.All(
-                    vol.Coerce(int), vol.Range(min=1, max=65535)
-                ),
-                vol.Optional(CONF_RTSP_STREAM, default=DEFAULT_RTSP_STREAM): str,
-            }
-        )
-        return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
+        return self.async_show_form(step_id="user", data_schema=USER_SCHEMA, errors=errors)
 
 
 class RecameraOptionsFlow(OptionsFlow):

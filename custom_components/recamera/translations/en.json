@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Add a reCamera",
-        "description": "Enter the address of a reCamera that runs the motion detection program. Home Assistant checks the device before saving.",
+        "description": "Enter a reCamera address. You can add a device before installing its application with reCamera Solution.",
         "data": {
           "host": "Host (IP address)",
           "device_name": "Name",
@@ -21,6 +21,7 @@
       }
     },
     "error": {
+      "invalid_host": "Enter a valid IP address or hostname.",
       "cannot_connect": "Cannot reach the motion detection API. Check the address, that the program is running, and that Home Assistant can reach this network.",
       "unknown": "Unexpected error while connecting to the camera."
     },
