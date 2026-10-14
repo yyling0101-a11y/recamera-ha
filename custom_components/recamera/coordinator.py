@@ -16,6 +16,8 @@ import time
 import zipfile
 from typing import Any, Callable
 
+import aiohttp
+
 from homeassistant.components import webhook
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
@@ -54,6 +56,7 @@ EVENT_HISTORY = 50
 SEEN_EVENTS = 64
 MAX_PACKAGE_BYTES = 8 * 1024 * 1024
 APP_ID = re.compile(r"^[a-z][a-z0-9_]{1,47}$")
+GITHUB_REPO = re.compile(r"^https://github\.com/([A-Za-z0-9-]{1,39})/([A-Za-z0-9_.-]{1,100})(?:\.git)?/?$")
 
 
 class RecameraCoordinator:
@@ -152,32 +155,23 @@ class RecameraCoordinator:
 
     @property
     def apps(self) -> list[dict[str, Any]]:
-        """Applications available on this device.
+        """Only show applications explicitly added to this camera in HA."""
 
-        A device runs a single application at a time; the panel lists them on
-        the device page and opens the running one. Region motion detection is
-        the first (and currently only) app, deployed as the on-device program.
-        """
-
-        return [
-            {
-                "id": "region_motion",
-                "name_key": "app_region_motion",
-                "description_key": "app_region_motion_desc",
-                "running": bool(self.available),
-                "installed": bool(self.available),
-                "source": DEVICE_SOURCE,
-                "version": self.app_version,
-            }
-        ] + [
-            {
+        apps = []
+        for manifest in self.custom_apps.values():
+            motion = manifest["id"] == "region_motion"
+            apps.append({
                 **manifest,
-                "running": time.monotonic() - self.app_seen_at.get(manifest["source"], 0) < 90,
-                "installed": None,
-                "uploaded": True,
-            }
-            for manifest in self.custom_apps.values()
-        ]
+                "running": bool(self.available) if motion else
+                    time.monotonic() - self.app_seen_at.get(manifest["source"], 0) < 90,
+                "installed": bool(self.available) if motion else None,
+                "uploaded": manifest.get("origin") == "package",
+            })
+        return apps
+
+    @property
+    def has_motion_app(self) -> bool:
+        return "region_motion" in self.custom_apps
 
     def as_dict(self) -> dict[str, Any]:
         """Serialisable view used by the sidebar panel."""
@@ -189,7 +183,7 @@ class RecameraCoordinator:
             "api_port": self.api_port,
             "api_base": self.api_base,
             "rtsp_url": self.rtsp_url,
-            "available": self.available or any(app["running"] for app in self.apps[1:]),
+            "available": self.available or any(app["running"] for app in self.apps),
             "reachable": self.reachable,
             "legacy_device": self.legacy_device,
             "motion": self.motion,
@@ -234,7 +228,8 @@ class RecameraCoordinator:
         )
         self._compute_push_url()
         await self.async_refresh_device()
-        await self.async_apply_push_settings()
+        if self.available and self.has_motion_app:
+            await self.async_apply_push_settings()
         self._poll_task = asyncio.create_task(self._poll_loop(), name=f"{DOMAIN}_poll_{self.entry.entry_id}")
         self._watchdog_task = asyncio.create_task(self._config_loop(), name=f"{DOMAIN}_cfg_{self.entry.entry_id}")
 
@@ -332,19 +327,20 @@ class RecameraCoordinator:
         return self.hass.config.path(".storage", "recamera_packages", self.entry.entry_id)
 
     async def async_load_packages(self) -> None:
-        """Read uploaded manifests without executing or extracting package contents."""
+        """Read manifests registered for this device without executing packages."""
         def _load() -> dict[str, dict[str, Any]]:
             found = {}
             if not os.path.isdir(self.package_folder):
                 return found
             for filename in os.listdir(self.package_folder):
-                if not filename.endswith(".zip"):
+                if not filename.endswith((".zip", ".json")):
                     continue
                 try:
                     with open(os.path.join(self.package_folder, filename), "rb") as handle:
-                        manifest = self._package_manifest(handle.read())
+                        manifest = (self._package_manifest(handle.read()) if filename.endswith(".zip")
+                                    else self._repository_manifest(json.loads(handle.read())))
                     found[manifest["id"]] = manifest
-                except (OSError, ValueError, zipfile.BadZipFile):
+                except (OSError, ValueError, UnicodeDecodeError, zipfile.BadZipFile):
                     _LOGGER.warning("Skipping invalid reCamera package %s", filename)
             return found
         self.custom_apps = await self.hass.async_add_executor_job(_load)
@@ -383,7 +379,87 @@ class RecameraCoordinator:
             "description": str(raw.get("description") or "")[:240],
             "source": source,
             "version": str(raw.get("version") or "")[:64],
+            "origin": "package",
         }
+
+    @staticmethod
+    def _repository_manifest(raw: Any) -> dict[str, Any]:
+        if not isinstance(raw, dict):
+            raise ValueError("App manifest must be a JSON object")
+        app_id, source = raw.get("id"), raw.get("source")
+        if not isinstance(app_id, str) or not APP_ID.fullmatch(app_id):
+            raise ValueError("Invalid app id")
+        if not isinstance(source, str) or not APP_ID.fullmatch(source):
+            raise ValueError("Invalid event source")
+        if (app_id == "region_motion") != (source == DEVICE_SOURCE):
+            raise ValueError("Region motion app must use its matching event source")
+        name = raw.get("name")
+        if not isinstance(name, str) or not 1 <= len(name.strip()) <= 80:
+            raise ValueError("App name is required (max 80 characters)")
+        repository = raw.get("repository")
+        if not isinstance(repository, str) or not GITHUB_REPO.fullmatch(repository):
+            raise ValueError("Invalid GitHub repository URL")
+        return {
+            "id": app_id, "name": name.strip(),
+            "description": str(raw.get("description") or "")[:240],
+            "source": source, "version": str(raw.get("version") or "")[:64],
+            "origin": "github", "repository": repository,
+        }
+
+    async def async_add_repository(self, url: str) -> dict[str, Any]:
+        """Fetch the root manifest from a public GitHub repo and save per device."""
+        match = GITHUB_REPO.fullmatch(url.strip())
+        if not match:
+            raise ValueError("Enter a GitHub repository URL, such as https://github.com/owner/repo")
+        owner, repo = match.groups()
+        repo = repo.removesuffix(".git")
+        repository = f"https://github.com/{owner}/{repo}"
+        timeout = aiohttp.ClientTimeout(total=12, connect=5)
+        try:
+            # raw.githubusercontent.com avoids the shared GitHub API rate limit.
+            # Unlike LAN device requests, this request should honor HA's HTTPS_PROXY.
+            async with aiohttp.ClientSession(timeout=timeout, trust_env=True) as session:
+                for branch in ("main", "master"):
+                    raw_url = f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/recamera-app.json"
+                    async with session.get(raw_url, allow_redirects=False) as response:
+                        if response.status == 404:
+                            continue
+                        if response.status != 200:
+                            raise ValueError(f"Cannot read recamera-app.json from GitHub (HTTP {response.status})")
+                        data = await response.content.read(32769)
+                        if len(data) > 32768:
+                            raise ValueError("App manifest is too large")
+                        break
+                else:
+                    raise ValueError("No recamera-app.json found on the main or master branch")
+        except (aiohttp.ClientError, TimeoutError) as err:
+            raise ValueError(f"Cannot reach GitHub: {err}") from err
+        try:
+            raw = json.loads(data)
+        except (ValueError, UnicodeDecodeError) as err:
+            raise ValueError("Invalid recamera-app.json") from err
+        if not isinstance(raw, dict):
+            raise ValueError("Invalid recamera-app.json")
+        raw["repository"] = repository
+        manifest = self._repository_manifest(raw)
+        if manifest["id"] in self.custom_apps and self.custom_apps[manifest["id"]].get("origin") != "github":
+            raise ValueError("An uploaded package already uses this app id")
+        if any(app["source"] == manifest["source"] and app["id"] != manifest["id"]
+               for app in self.custom_apps.values()):
+            raise ValueError("Another app already uses this event source")
+        def _write() -> None:
+            os.makedirs(self.package_folder, exist_ok=True)
+            target = os.path.join(self.package_folder, manifest["id"] + ".json")
+            staged = target + ".tmp"
+            with open(staged, "w", encoding="utf-8") as handle:
+                json.dump(manifest, handle)
+            os.replace(staged, target)
+        await self.hass.async_add_executor_job(_write)
+        self.custom_apps[manifest["id"]] = manifest
+        self._notify_listeners()
+        if manifest["id"] == "region_motion" and self.available:
+            await self.async_apply_push_settings()
+        return manifest
 
     async def async_upload_package(self, encoded: str) -> dict[str, Any]:
         if len(encoded) > MAX_PACKAGE_BYTES * 2:
@@ -396,6 +472,8 @@ class RecameraCoordinator:
             manifest = await self.hass.async_add_executor_job(self._package_manifest, data)
         except zipfile.BadZipFile as err:
             raise ValueError("Invalid ZIP package") from err
+        if manifest["id"] in self.custom_apps and self.custom_apps[manifest["id"]].get("origin") != "package":
+            raise ValueError("A GitHub app already uses this app id")
         if any(
             app["source"] == manifest["source"] and app["id"] != manifest["id"]
             for app in self.custom_apps.values()
@@ -413,10 +491,23 @@ class RecameraCoordinator:
         self._notify_listeners()
         return manifest
 
+    async def async_remove_app(self, app_id: str) -> None:
+        manifest = self.custom_apps.get(app_id)
+        if manifest is None:
+            raise ValueError("App is not registered on this device")
+        extension = ".json" if manifest.get("origin") == "github" else ".zip"
+        path = os.path.join(self.package_folder, app_id + extension)
+        await self.hass.async_add_executor_job(os.remove, path)
+        self.custom_apps.pop(app_id, None)
+        self.app_seen_at.pop(manifest["source"], None)
+        self._notify_listeners()
+        if app_id == "region_motion" and self.available:
+            await self.async_apply_push_settings()
+
     async def async_apply_push_settings(self) -> None:
         """Tell the camera where to push events (or disable pushing)."""
 
-        if not self.push_enabled or not self.push_url:
+        if not self.has_motion_app or not self.push_enabled or not self.push_url:
             desired_enabled = False
             url = self.push_url or ""
         else:
@@ -472,7 +563,11 @@ class RecameraCoordinator:
                 self.available = True
                 self.reachable = True
                 self.push_error = ""
-                asyncio.create_task(self.async_refresh_device())
+                async def _refresh_after_reconnect() -> None:
+                    await self.async_refresh_device()
+                    if self.available and self.has_motion_app:
+                        await self.async_apply_push_settings()
+                asyncio.create_task(_refresh_after_reconnect())
             self._process_status(status)
 
     async def _config_loop(self) -> None:
@@ -543,6 +638,8 @@ class RecameraCoordinator:
                 asyncio.create_task(self._handle_custom_push(payload))
             else:
                 _LOGGER.debug("reCamera %s: ignoring foreign webhook payload", self.name)
+            return
+        if not self.has_motion_app:
             return
         self.push_received += 1
         asyncio.create_task(self._handle_push_payload(payload))
@@ -623,6 +720,8 @@ class RecameraCoordinator:
         status: dict[str, Any] | None = None,
         image_bytes: bytes | None = None,
     ) -> None:
+        if not self.has_motion_app:
+            return
         key = (event_id, event_type)
         async with self._lock:
             if event_id and self._seen.get(key):

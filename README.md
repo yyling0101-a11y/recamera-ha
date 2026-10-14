@@ -168,10 +168,26 @@ cp -a /tmp/recamera-ha/custom_components/recamera ./recamera
 2. **设置 → 系统 → 网络**，把 **本地访问地址 / Internal URL** 填成 HA 实际地址（例如 `http://192.168.3.205:8123`）。
    设备靠这个地址回推告警。**不填也能用**，会自动退化为轮询。
    Set **Settings → System → Network → Internal URL** so the camera can push alerts back. Skipping it still works — the integration falls back to polling.
-3. 侧边栏出现 **reCamera**，点进去就是设备卡片 → **选区运动检测**。
+3. 侧边栏出现 **reCamera**。新设备的应用列表为空；打开设备卡片，点
+   **从 GitHub 添加应用**，输入
+   `https://github.com/yyling0101-a11y/recamera_motion_detection`，
+   HA 会读取仓库根目录的 `recamera-app.json`，为**这台设备**添加选区运动检测卡片。
 
 设备可以在 Solution 刷入应用前先加入 HA；此时卡片会分别显示设备是否可达、
 应用接口是否在线。每个设备都有独立的配置项、实体、推送地址和事件记录。
+在 HA 中添加 GitHub 应用只读取配置并登记卡片，不会向设备刷入程序；
+设备程序仍由 reCamera Solution 安装。每台设备分别添加或移除应用，
+互不影响。其他应用仓库也可在根目录提供 `recamera-app.json`：
+
+```json
+{
+  "id": "person_detector",
+  "name": "Person detector",
+  "description": "Reports people detected in the camera view",
+  "version": "1.0.0",
+  "source": "person_detector"
+}
+```
 
 ## 自定义应用包与事件 / Custom app packages and events
 

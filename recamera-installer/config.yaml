@@ -1,5 +1,5 @@
 name: reCamera Installer
-version: "1.1.1"
+version: "1.2.0"
 slug: recamera-installer
 description: Installs the SG2002 reCamera integration into Home Assistant.
 url: https://github.com/yyling0101-a11y/recamera-ha

@@ -109,6 +109,13 @@
       dirty_hint: "有未保存的修改",
       zone_added: "已添加区域，记得点「保存选区」写入设备",
       apps_title: "应用",
+      no_apps: "尚未添加应用。粘贴应用的 GitHub 仓库地址，读取仓库根目录的 recamera-app.json。",
+      add_repository: "从 GitHub 添加应用",
+      repository_url: "GitHub 仓库地址",
+      repository_hint: "例如 https://github.com/yyling0101-a11y/recamera_motion_detection。此操作只在 HA 中登记应用；设备端程序仍由 reCamera Solution 安装。",
+      repository_added: "应用配置已添加到此设备",
+      remove_app: "移除应用",
+      remove_app_confirm: "从此设备的 HA 页面移除应用配置？这不会卸载设备上的程序。",
       running_app: "当前应用",
       app_running: "运行中",
       app_stopped: "未检测到应用",
@@ -232,6 +239,13 @@
       dirty_hint: "Unsaved changes",
       zone_added: "Zone added - press Save regions to write it to the camera",
       apps_title: "Apps",
+      no_apps: "No apps added yet. Paste an app's GitHub repository URL to read recamera-app.json from its root.",
+      add_repository: "Add app from GitHub",
+      repository_url: "GitHub repository URL",
+      repository_hint: "For example https://github.com/yyling0101-a11y/recamera_motion_detection. This registers the app in HA; install the device program with reCamera Solution.",
+      repository_added: "App configuration added to this device",
+      remove_app: "Remove app",
+      remove_app_confirm: "Remove this app configuration from the device in HA? The device program will remain installed.",
       running_app: "Current app",
       app_running: "Running",
       app_stopped: "No app detected",
@@ -910,6 +924,8 @@
     _deviceView() {
       const state = this._state;
       const apps = state.apps || [];
+      const hasMotionApp = apps.some((app) => app.id === "region_motion");
+      const motionRunning = apps.some((app) => app.id === "region_motion" && app.running);
       const chips = [
         h(
           "span",
@@ -920,9 +936,9 @@
         h("span", { class: "chip" },
           h("i", { class: `dot ${state.reachable ? "ok" : "bad"}` }),
           state.reachable ? this.t("reachable") : this.t("unreachable")),
-        state.apps?.[0]?.running
+        hasMotionApp ? (motionRunning
           ? (state.motion ? h("span", { class: "chip live" }, this.t("motion")) : h("span", { class: "chip" }, this.t("idle")))
-          : h("span", { class: "chip warn" }, this.t("api_unavailable")),
+          : h("span", { class: "chip warn" }, this.t("api_unavailable"))) : null,
       ];
       const header = h(
         "div",
@@ -938,25 +954,61 @@
         {},
         header,
         h("div", { class: "chip-row", style: { marginTop: "10px" } }, chips),
-        h(
+        hasMotionApp ? h(
           "div",
           { class: "panel", style: { marginTop: "16px" } },
           h("h3", {}, this.t("live")),
-          state.apps?.[0]?.running
+          motionRunning
             ? h("div", { class: "preview-stage" },
                 (this._previewImg = h("img", { alt: state.name, onerror: () => this._onPreviewError() })))
             : h("div", { class: "empty" }, this.t("api_unavailable")),
-          state.apps?.[0]?.running
+          motionRunning
             ? h("div", { class: "hint", style: { marginTop: "8px" } }, this.t("stream_hint"))
             : null
-        ),
+        ) : null,
         h("h3", { style: { margin: "18px 0 4px", fontSize: "15px", fontWeight: "500" } }, this.t("apps_title")),
         h("div", { class: "hint", style: { marginBottom: "10px" } }, this.t("one_app_hint")),
-        h("div", { class: "cards" }, apps.map((app) => this._appCard(app))),
+        apps.length ? h("div", { class: "cards" }, apps.map((app) => this._appCard(app)))
+          : h("div", { class: "empty" }, this.t("no_apps")),
+        h("div", { class: "panel", style: { marginTop: "18px" } },
+          h("button", { onclick: () => this._openRepositoryModal() }, this.t("add_repository")),
+          h("div", { class: "hint", style: { marginTop: "8px" } }, this.t("repository_hint"))),
         h("div", { class: "panel", style: { marginTop: "18px" } },
           h("button", { onclick: () => this._choosePackage() }, this.t("upload_package")),
           h("div", { class: "hint", style: { marginTop: "8px" } }, this.t("upload_hint")))
       );
+    }
+
+    _openRepositoryModal() {
+      const input = h("input", { type: "text", name: "repository", placeholder: "https://github.com/owner/repo", required: "true" });
+      const errorBox = h("div", { class: "error", style: { display: "none" } });
+      const overlay = h("div", { class: "overlay" },
+        h("div", { class: "modal" },
+          h("h2", {}, this.t("add_repository")),
+          errorBox,
+          h("form", { onsubmit: async (event) => {
+            event.preventDefault();
+            const button = event.target.querySelector('button[type="submit"]');
+            button.disabled = true;
+            try {
+              await this.ws("add_repository", { entry_id: this._state.entry_id, url: input.value.trim() });
+              overlay.remove();
+              this._state = await this.ws("state", { entry_id: this._state.entry_id });
+              this._render();
+              this.toast(this.t("repository_added"));
+            } catch (error) {
+              errorBox.textContent = this._apiErrorText(error);
+              errorBox.style.display = "block";
+            } finally {
+              button.disabled = false;
+            }
+          } },
+            h("label", { class: "field" }, h("span", {}, this.t("repository_url")), input),
+            h("div", { class: "actions" },
+              h("button", { type: "button", class: "ghost", onclick: () => overlay.remove() }, this.t("cancel")),
+              h("button", { type: "submit" }, this.t("add_repository"))))));
+      this.shadowRoot.appendChild(overlay);
+      input.focus();
     }
 
     _choosePackage() {
@@ -1054,6 +1106,15 @@
       return h(
         "div",
         { class: `card app-card${running ? "" : " stopped"}`, onclick: open },
+        h("button", { class: "del", title: this.t("remove_app"), onclick: async (event) => {
+          event.stopPropagation();
+          if (!window.confirm(this.t("remove_app_confirm"))) return;
+          try {
+            await this.ws("remove_app", { entry_id: this._state.entry_id, app_id: app.id });
+            this._state = await this.ws("state", { entry_id: this._state.entry_id });
+            this._render();
+          } catch (error) { this.toast(this._apiErrorText(error), "bad"); }
+        } }, "✕"),
         h("div", { class: "app-icon" }, "▦"),
         h("h2", {}, label),
         desc ? h("div", { class: "hint" }, desc) : null,

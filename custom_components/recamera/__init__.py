@@ -209,6 +209,52 @@ def _register_websocket_commands(hass: HomeAssistant) -> None:
 
     @websocket_api.websocket_command(
         {
+            vol.Required("type"): f"{DOMAIN}/add_repository",
+            vol.Required("entry_id"): cv.string,
+            vol.Required("url"): cv.string,
+        }
+    )
+    @websocket_api.require_admin
+    @websocket_api.async_response
+    async def ws_add_repository(
+        hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+    ) -> None:
+        coordinator = _coordinator(hass, msg["entry_id"])
+        if coordinator is None:
+            connection.send_error(msg["id"], "not_found", "unknown reCamera")
+            return
+        try:
+            manifest = await coordinator.async_add_repository(msg["url"])
+        except (ValueError, OSError) as err:
+            connection.send_error(msg["id"], "invalid_repository", str(err))
+            return
+        connection.send_result(msg["id"], {"app": manifest})
+
+    @websocket_api.websocket_command(
+        {
+            vol.Required("type"): f"{DOMAIN}/remove_app",
+            vol.Required("entry_id"): cv.string,
+            vol.Required("app_id"): cv.string,
+        }
+    )
+    @websocket_api.require_admin
+    @websocket_api.async_response
+    async def ws_remove_app(
+        hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+    ) -> None:
+        coordinator = _coordinator(hass, msg["entry_id"])
+        if coordinator is None:
+            connection.send_error(msg["id"], "not_found", "unknown reCamera")
+            return
+        try:
+            await coordinator.async_remove_app(msg["app_id"])
+        except (ValueError, OSError) as err:
+            connection.send_error(msg["id"], "remove_failed", str(err))
+            return
+        connection.send_result(msg["id"], {})
+
+    @websocket_api.websocket_command(
+        {
             vol.Required("type"): f"{DOMAIN}/upload_package",
             vol.Required("entry_id"): cv.string,
             vol.Required("package"): cv.string,
@@ -446,6 +492,8 @@ def _register_websocket_commands(hass: HomeAssistant) -> None:
 
     for command in (
         ws_devices,
+        ws_add_repository,
+        ws_remove_app,
         ws_upload_package,
         ws_state,
         ws_refresh,
